@@ -83,7 +83,7 @@ def sync_actuals(self, tenant_id: str):
             batch.append({
                 "tenant_id": tenant_id,
                 "property_id": str(prop_id),
-                "date": record.date.isoformat(),
+                "actual_date": record.date.isoformat(),
                 "line_item_id": str(li_id),
                 "value": record.value,
                 "per_unit_value": record.per_unit_value,
@@ -107,7 +107,7 @@ def _upsert_batch(session: Session, batch: list[dict]):
     for row in batch:
         session.execute(text("""
             INSERT INTO daily_actuals (tenant_id, property_id, date, line_item_id, value, per_unit_value)
-            VALUES (:tenant_id, :property_id, :date::date, :line_item_id, :value, :per_unit_value)
+            VALUES (:tenant_id, :property_id, CAST(:actual_date AS date), :line_item_id, :value, :per_unit_value)
             ON CONFLICT (tenant_id, property_id, date, line_item_id)
             DO UPDATE SET value = EXCLUDED.value, per_unit_value = EXCLUDED.per_unit_value, updated_at = NOW()
         """), row)

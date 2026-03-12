@@ -166,6 +166,8 @@ class TestGetInterMonth:
         svc._fetch_actuals = AsyncMock(return_value={LINE_ITEM_ID: 100000})
         svc._fetch_budget_data = AsyncMock(return_value={LINE_ITEM_ID: 80000})
         svc._fetch_prior_year = AsyncMock(return_value={LINE_ITEM_ID: 90000})
+        # Mock rollup to pass through (leaf data already keyed by correct IDs)
+        svc._rollup_to_summaries = AsyncMock(side_effect=lambda db, data: data)
 
         mock_item = MagicMock()
         mock_item.id = LINE_ITEM_ID

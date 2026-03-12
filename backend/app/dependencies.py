@@ -1,3 +1,4 @@
+import logging
 import uuid
 from typing import AsyncGenerator
 
@@ -7,12 +8,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.clerk import verify_clerk_token
+from app.config import settings
 from app.db.engine import async_session_factory
 from app.models.user import User
 
+logger = logging.getLogger(__name__)
+
 
 async def get_current_user_claims(request: Request) -> dict:
-    """Extract and verify Clerk JWT from Authorization header."""
+    """Extract and verify Clerk JWT from Authorization header.
+
+    In development mode with no CLERK_SECRET_KEY configured, accepts a
+    special ``X-Dev-User-Email`` header to bypass JWT verification.
+    This NEVER activates in production.
+    """
+    # --- Dev bypass: no Clerk key configured ---------------------------------
+    if settings.environment == "development" and not settings.clerk_secret_key:
+        dev_email = request.headers.get("X-Dev-User-Email")
+        if dev_email:
+            logger.warning("DEV AUTH BYPASS: using X-Dev-User-Email=%s", dev_email)
+            return {"sub": f"dev_{dev_email}", "email": dev_email, "_dev_bypass": True}
+    # -------------------------------------------------------------------------
+
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
         raise HTTPException(
@@ -37,11 +54,27 @@ async def get_current_user(
     This fetches the user from DB in a separate session (without RLS)
     so we can discover the tenant_id for subsequent queries.
     """
-    clerk_id = claims.get("sub")
-    if not clerk_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
-
     async with async_session_factory() as session:
+        # Dev bypass: look up by email instead of clerk_id
+        if claims.get("_dev_bypass"):
+            email = claims["email"]
+            result = await session.execute(
+                select(User)
+                .options(selectinload(User.properties))
+                .where(User.email == email, User.is_active == True)  # noqa: E712
+            )
+            user = result.scalar_one_or_none()
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"Dev user '{email}' not found in database",
+                )
+            return user
+
+        clerk_id = claims.get("sub")
+        if not clerk_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token claims")
+
         result = await session.execute(
             select(User)
             .options(selectinload(User.properties))

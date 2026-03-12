@@ -62,6 +62,12 @@ class DataSourceAdapter(ABC):
     ) -> list[RawBudgetRecord]:
         ...
 
+    async def fetch_budgets_monthly(
+        self, property_codes: list[str], year: int
+    ) -> list[RawBudgetRecord]:
+        """Fetch budgets broken down by month (default: delegates to fetch_budgets)."""
+        return await self.fetch_budgets(property_codes, year)
+
     @abstractmethod
     async def fetch_forecasts(
         self, property_codes: list[str], year: int

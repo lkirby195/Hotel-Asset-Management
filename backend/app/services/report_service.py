@@ -67,14 +67,19 @@ class ReportService:
             if cached:
                 return InterMonthResponse(**cached)
 
-        # Fetch actuals from appropriate source
-        actuals = await self._fetch_actuals(db, property_id, period, start_date, end_date)
+        # Fetch leaf-level actuals from appropriate source
+        leaf_actuals = await self._fetch_actuals(db, property_id, period, start_date, end_date)
 
         # Fetch budget data (prorated for the period)
-        budget_data = await self._fetch_budget_data(db, property_id, eff_start, eff_end)
+        leaf_budgets = await self._fetch_budget_data(db, property_id, eff_start, eff_end)
 
         # Fetch prior year data
-        py_data = await self._fetch_prior_year(db, property_id, eff_start, eff_end)
+        leaf_py = await self._fetch_prior_year(db, property_id, eff_start, eff_end)
+
+        # Roll up leaf values to all ancestor summary items
+        actuals = await self._rollup_to_summaries(db, leaf_actuals)
+        budget_data = await self._rollup_to_summaries(db, leaf_budgets)
+        py_data = await self._rollup_to_summaries(db, leaf_py)
 
         # Fetch top-level (summary) line items
         line_items = await self._fetch_line_items(db, parent_id=None, summary_only=True)
@@ -128,9 +133,13 @@ class ReportService:
             if cached:
                 return [ReportLineItem(**item) for item in cached]
 
-        actuals = await self._fetch_actuals(db, property_id, period, start_date, end_date)
-        budget_data = await self._fetch_budget_data(db, property_id, eff_start, eff_end)
-        py_data = await self._fetch_prior_year(db, property_id, eff_start, eff_end)
+        leaf_actuals = await self._fetch_actuals(db, property_id, period, start_date, end_date)
+        leaf_budgets = await self._fetch_budget_data(db, property_id, eff_start, eff_end)
+        leaf_py = await self._fetch_prior_year(db, property_id, eff_start, eff_end)
+
+        actuals = await self._rollup_to_summaries(db, leaf_actuals)
+        budget_data = await self._rollup_to_summaries(db, leaf_budgets)
+        py_data = await self._rollup_to_summaries(db, leaf_py)
 
         child_items = await self._fetch_line_items(db, parent_id=parent_id, summary_only=False)
         lines = self._build_lines(child_items, actuals, budget_data, py_data, depth=1)
@@ -273,6 +282,39 @@ class ReportService:
             "end_date": py_end,
         })
         return {row.line_item_id: row.actual_value for row in result.fetchall()}
+
+    async def _rollup_to_summaries(
+        self,
+        db: AsyncSession,
+        leaf_data: dict[uuid.UUID, int],
+    ) -> dict[uuid.UUID, int]:
+        """Given leaf-level values, roll them up to ancestor summary items.
+
+        Uses a recursive CTE to find all ancestors of each leaf item,
+        then sums leaf values into each ancestor.
+        Returns a merged dict containing both leaf and summary values.
+        """
+        if not leaf_data:
+            return leaf_data
+
+        # Get the full parent-child mapping
+        result = await db.execute(
+            select(LineItem.id, LineItem.parent_id)
+        )
+        rows = result.fetchall()
+
+        # Build child -> parent lookup
+        parent_of: dict[uuid.UUID, uuid.UUID | None] = {r.id: r.parent_id for r in rows}
+
+        # For each leaf with data, walk up the tree and accumulate
+        rolled: dict[uuid.UUID, int] = dict(leaf_data)
+        for leaf_id, value in leaf_data.items():
+            current = parent_of.get(leaf_id)
+            while current is not None:
+                rolled[current] = rolled.get(current, 0) + value
+                current = parent_of.get(current)
+
+        return rolled
 
     async def _fetch_line_items(
         self,
