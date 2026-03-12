@@ -1,4 +1,6 @@
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -6,6 +8,14 @@ from sqlalchemy import engine_from_config, pool
 config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
+# Add the backend directory to sys.path so we can import app.config
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+# Pull DB URL from app config (reads from .env) so alembic.ini stays generic
+from app.config import settings  # noqa: E402
+
+config.set_main_option("sqlalchemy.url", settings.database_url_sync)
 
 target_metadata = None
 

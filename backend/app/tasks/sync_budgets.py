@@ -33,9 +33,9 @@ def sync_budgets(self, tenant_id: str):
 
         adapter = _get_adapter()
 
-        # Fetch budgets
+        # Fetch budgets (monthly for proper proration in reports)
         budget_records = asyncio.get_event_loop().run_until_complete(
-            adapter.fetch_budgets(list(property_map.keys()), today.year)
+            adapter.fetch_budgets_monthly(list(property_map.keys()), today.year)
         )
         budget_count = 0
         for record in budget_records:

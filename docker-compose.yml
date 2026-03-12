@@ -29,9 +29,14 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    command: celery -A app.tasks.celery_app worker --loglevel=info
+    command: celery -A app.tasks.celery_app worker --loglevel=info --concurrency=2
     env_file:
       - ./backend/.env
+    environment:
+      # Override DB/Redis URLs to use Docker service names
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@db:5432/hotel_am
+      DATABASE_URL_SYNC: postgresql://postgres:postgres@db:5432/hotel_am
+      REDIS_URL: redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
