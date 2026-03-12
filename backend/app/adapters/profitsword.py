@@ -1,6 +1,19 @@
+"""ProfitSword / ProfitSage Data Portal v3 adapter.
+
+Key learnings from working daily_report codebase:
+- Auth: POST {base}/token with grant_type=password (token as query param, not header)
+- All financial data comes via GET DailyExtended (not MonthlyExtended)
+- includeTotals must be "Y" (not "true"/"false") — API returns nothing without it
+- BD/ED use MM/dd/yyyy format; asOfDate uses YYYY-MM-DD
+- Response fields: siteTag, siteName, itemTag, description, accountNumber, statAccount, date, asOfDate, stat, amt
+- Each row has dual values: amt (dollars) and stat (units/rooms/hours)
+- Date ranges return pre-aggregated sums per itemTag per site
+- Dataset IDs: Actuals=-3, Budget=2, Forecast=1, OTB=-5
+"""
+
 import logging
 import time
-from datetime import date
+from datetime import date, datetime
 
 import httpx
 
@@ -16,13 +29,15 @@ from app.adapters.mapping import MappingEngine
 
 logger = logging.getLogger(__name__)
 
+# ProfitSage dataset IDs
+DATASET_ACTUALS = -3
+DATASET_BUDGET = 2
+DATASET_FORECAST = 1
+DATASET_OTB = -5
+
 
 class ProfitSwordAdapter(DataSourceAdapter):
-    """ProfitSword / ProfitSage Data Portal v3 integration.
-
-    Auth: OAuth-style token (username + password → bearer token).
-    Endpoints: DailyExtended (daily actuals), MonthlyExtended (monthly actuals/budgets/forecasts).
-    """
+    """ProfitSword / ProfitSage Data Portal v3 integration."""
 
     def __init__(
         self,
@@ -30,9 +45,9 @@ class ProfitSwordAdapter(DataSourceAdapter):
         username: str,
         password: str,
         mapping: MappingEngine,
-        dataset_actuals: int,
-        dataset_budget: int,
-        dataset_forecast: int,
+        dataset_actuals: int = DATASET_ACTUALS,
+        dataset_budget: int = DATASET_BUDGET,
+        dataset_forecast: int = DATASET_FORECAST,
     ):
         self.base_url = base_url.rstrip("/")
         self._username = username
@@ -75,41 +90,109 @@ class ProfitSwordAdapter(DataSourceAdapter):
         return self._token
 
     async def _get(self, endpoint: str, params: dict) -> list[dict]:
-        """Make an authenticated GET request to the Data Portal v3 API."""
+        """Make an authenticated GET to Data Portal v3. Returns list of dicts or []."""
         token = await self._ensure_token()
         params["access_token"] = token
         url = f"{self.base_url}/api/DataPortalv3/{endpoint}"
 
-        resp = await self.client.get(url, params=params)
+        resp = await self._request_with_retry(url, params)
         resp.raise_for_status()
-        return resp.json()
+
+        # API returns a JSON string "No data downloaded." when empty
+        try:
+            data = resp.json()
+        except Exception:
+            logger.warning(f"{endpoint}: non-JSON response ({resp.text[:100]})")
+            return []
+
+        if isinstance(data, str):
+            if "no data" in data.lower():
+                logger.debug(f"{endpoint}: no data for params {params}")
+            else:
+                logger.warning(f"{endpoint}: unexpected string response: {data[:100]}")
+            return []
+
+        if not isinstance(data, list):
+            logger.warning(f"{endpoint}: unexpected response type {type(data)}")
+            return []
+
+        return data
+
+    async def _request_with_retry(
+        self, url: str, params: dict, max_retries: int = 2
+    ) -> httpx.Response:
+        """GET with retry on 429/5xx and connection errors."""
+        last_exc = None
+        for attempt in range(max_retries + 1):
+            try:
+                resp = await self.client.get(url, params=params)
+                if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
+                    import asyncio
+                    await asyncio.sleep(1 * (attempt + 1))
+                    continue
+                return resp
+            except (httpx.ConnectError, httpx.ReadTimeout) as e:
+                last_exc = e
+                if attempt < max_retries:
+                    import asyncio
+                    await asyncio.sleep(1 * (attempt + 1))
+                    continue
+                raise
+        raise last_exc  # type: ignore
 
     # ── Date formatting ────────────────────────────────────────────
 
     @staticmethod
     def _fmt_date(d: date) -> str:
-        """Format date as MM/dd/yyyy (ProfitSword convention)."""
+        """Format date as MM/dd/yyyy for BD/ED params."""
         return d.strftime("%m/%d/%Y")
 
-    # ── Core data fetching ─────────────────────────────────────────
+    @staticmethod
+    def _fmt_as_of_date(d: date) -> str:
+        """Format date as YYYY-MM-DD for asOfDate param."""
+        return d.strftime("%Y-%m-%d")
+
+    # ── Core: DailyExtended ────────────────────────────────────────
+
+    async def _fetch_daily_extended(
+        self,
+        site_tag: str,
+        start_date: date,
+        end_date: date,
+        dataset_id: int,
+        as_of_date: date | None = None,
+    ) -> list[dict]:
+        """Call DailyExtended for a single site. Returns raw row dicts."""
+        params = {
+            "dataSetID": dataset_id,
+            "BD": self._fmt_date(start_date),
+            "ED": self._fmt_date(end_date),
+            "siteTag": site_tag,
+            "includeTotals": "Y",
+            "includeZeroes": "N",
+        }
+        if as_of_date:
+            params["asOfDate"] = self._fmt_as_of_date(as_of_date)
+
+        return await self._get("DailyExtended", params)
+
+    # ── Public API: fetch_daily_actuals ────────────────────────────
 
     async def fetch_daily_actuals(
         self, property_codes: list[str], start_date: date, end_date: date
     ) -> list[RawActualRecord]:
-        """Fetch daily actuals via DailyExtended endpoint."""
+        """Fetch daily actuals via DailyExtended (dataSetID=-3).
+
+        When a date range is provided, the API returns pre-aggregated
+        sums per itemTag per site (one row per tag, not per day).
+        """
         records: list[RawActualRecord] = []
 
         for site_tag in property_codes:
             try:
-                data = await self._get("DailyExtended", {
-                    "dataSetID": self.dataset_actuals,
-                    "bd": self._fmt_date(start_date),
-                    "ed": self._fmt_date(end_date),
-                    "siteTag": site_tag,
-                    "includeTotals": "false",
-                    "includeZeroes": "false",
-                })
-
+                data = await self._fetch_daily_extended(
+                    site_tag, start_date, end_date, self.dataset_actuals
+                )
                 for row in data:
                     item_tag = str(row.get("itemTag", ""))
                     internal_code = self.mapping.translate(item_tag)
@@ -118,87 +201,152 @@ class ProfitSwordAdapter(DataSourceAdapter):
 
                     row_date = self._parse_date(row.get("date", ""))
                     if not row_date:
-                        continue
-
-                    amt = row.get("amt", 0)
-                    qty = row.get("qty")
+                        # For aggregated ranges, date may be the end date
+                        row_date = end_date
 
                     records.append(RawActualRecord(
                         property_code=site_tag,
                         date=row_date,
                         account_code=internal_code,
-                        value=_dollars_to_cents(amt),
-                        per_unit_value=_dollars_to_cents(qty) if qty else None,
+                        value=_dollars_to_cents(row.get("amt")),
+                        per_unit_value=_stat_to_units(row.get("stat")),
                     ))
 
             except httpx.HTTPError as e:
-                logger.error(f"DailyExtended failed for {site_tag}: {e}")
+                logger.error(f"DailyExtended actuals failed for {site_tag}: {e}")
 
-        logger.info(f"Fetched {len(records)} daily actual records")
+        logger.info(f"Fetched {len(records)} daily actual records from {len(property_codes)} sites")
         return records
+
+    # ── Public API: fetch_budgets ──────────────────────────────────
 
     async def fetch_budgets(
         self, property_codes: list[str], year: int
     ) -> list[RawBudgetRecord]:
-        """Fetch budget data via MonthlyExtended endpoint."""
-        return await self._fetch_monthly(
-            property_codes, year, self.dataset_budget, "budget"
-        )
+        """Fetch budget data via DailyExtended (dataSetID=2).
 
-    async def fetch_forecasts(
-        self, property_codes: list[str], year: int
-    ) -> list[RawForecastRecord]:
-        """Fetch forecast data via MonthlyExtended endpoint."""
-        return await self._fetch_monthly(
-            property_codes, year, self.dataset_forecast, "forecast"
-        )
-
-    async def _fetch_monthly(
-        self,
-        property_codes: list[str],
-        year: int,
-        dataset_id: int,
-        label: str,
-    ) -> list[RawBudgetRecord] | list[RawForecastRecord]:
-        """Shared logic for MonthlyExtended (budgets and forecasts use same endpoint)."""
-        RecordClass = RawBudgetRecord if label == "budget" else RawForecastRecord
-        records = []
+        Fetches full year as a single range. The API returns one row per
+        itemTag per site with the sum for the entire date range.
+        """
+        start = date(year, 1, 1)
+        end = date(year, 12, 31)
+        records: list[RawBudgetRecord] = []
 
         for site_tag in property_codes:
             try:
-                data = await self._get("MonthlyExtended", {
-                    "dataSetID": dataset_id,
-                    "year": year,
-                    "begmonth": 1,
-                    "endmonth": 12,
-                    "siteTag": site_tag,
-                    "includeTotals": "false",
-                    "includeZeroes": "false",
-                })
-
+                data = await self._fetch_daily_extended(
+                    site_tag, start, end, self.dataset_budget
+                )
                 for row in data:
                     item_tag = str(row.get("itemTag", ""))
                     internal_code = self.mapping.translate(item_tag)
                     if not internal_code:
                         continue
 
-                    month = row.get("month") or row.get("fiscalPeriod")
-                    if not month:
-                        continue
-
-                    amt = row.get("amt", 0)
-                    records.append(RecordClass(
+                    # Budget from DailyExtended is aggregated for the full range.
+                    # We store as year/month=0 to indicate annual, or fetch per-month
+                    # if needed. For now, store annual totals.
+                    records.append(RawBudgetRecord(
                         property_code=site_tag,
                         year=year,
-                        month=int(month),
+                        month=0,  # annual total
                         account_code=internal_code,
-                        value=_dollars_to_cents(amt),
+                        value=_dollars_to_cents(row.get("amt")),
                     ))
 
             except httpx.HTTPError as e:
-                logger.error(f"MonthlyExtended ({label}) failed for {site_tag}: {e}")
+                logger.error(f"DailyExtended budget failed for {site_tag}: {e}")
 
-        logger.info(f"Fetched {len(records)} {label} records")
+        logger.info(f"Fetched {len(records)} budget records")
+        return records
+
+    async def fetch_budgets_monthly(
+        self, property_codes: list[str], year: int
+    ) -> list[RawBudgetRecord]:
+        """Fetch budget data month-by-month for proper proration.
+
+        Makes 12 API calls per site (one per month) to get monthly totals.
+        """
+        records: list[RawBudgetRecord] = []
+        import calendar
+
+        for site_tag in property_codes:
+            for month in range(1, 13):
+                try:
+                    start = date(year, month, 1)
+                    last_day = calendar.monthrange(year, month)[1]
+                    end = date(year, month, last_day)
+
+                    data = await self._fetch_daily_extended(
+                        site_tag, start, end, self.dataset_budget
+                    )
+                    for row in data:
+                        item_tag = str(row.get("itemTag", ""))
+                        internal_code = self.mapping.translate(item_tag)
+                        if not internal_code:
+                            continue
+
+                        records.append(RawBudgetRecord(
+                            property_code=site_tag,
+                            year=year,
+                            month=month,
+                            account_code=internal_code,
+                            value=_dollars_to_cents(row.get("amt")),
+                        ))
+
+                except httpx.HTTPError as e:
+                    logger.error(f"Budget month {month} failed for {site_tag}: {e}")
+
+        logger.info(f"Fetched {len(records)} monthly budget records")
+        return records
+
+    # ── Public API: fetch_forecasts ────────────────────────────────
+
+    async def fetch_forecasts(
+        self, property_codes: list[str], year: int
+    ) -> list[RawForecastRecord]:
+        """Fetch forecast data via DailyExtended (dataSetID=1).
+
+        Uses asOfDate = end of prior month for the current forecast snapshot.
+        """
+        records: list[RawForecastRecord] = []
+        import calendar
+
+        for site_tag in property_codes:
+            for month in range(1, 13):
+                try:
+                    start = date(year, month, 1)
+                    last_day = calendar.monthrange(year, month)[1]
+                    end = date(year, month, last_day)
+
+                    # asOfDate = end of prior month (forecast as of that snapshot)
+                    if month == 1:
+                        as_of = date(year - 1, 12, 31)
+                    else:
+                        prev_last_day = calendar.monthrange(year, month - 1)[1]
+                        as_of = date(year, month - 1, prev_last_day)
+
+                    data = await self._fetch_daily_extended(
+                        site_tag, start, end, self.dataset_forecast, as_of_date=as_of
+                    )
+                    for row in data:
+                        item_tag = str(row.get("itemTag", ""))
+                        internal_code = self.mapping.translate(item_tag)
+                        if not internal_code:
+                            continue
+
+                        records.append(RawForecastRecord(
+                            property_code=site_tag,
+                            year=year,
+                            month=month,
+                            account_code=internal_code,
+                            value=_dollars_to_cents(row.get("amt")),
+                        ))
+
+                except httpx.HTTPError as e:
+                    logger.error(f"Forecast month {month} failed for {site_tag}: {e}")
+
+        logger.info(f"Fetched {len(records)} forecast records")
         return records
 
     # ── Discovery endpoints ────────────────────────────────────────
@@ -209,7 +357,7 @@ class ProfitSwordAdapter(DataSourceAdapter):
         return [
             SiteInfo(
                 site_tag=row.get("siteTag", ""),
-                site_name=row.get("siteName", ""),
+                site_name=_strip_site_prefix(row.get("siteName", "")),
                 address1=row.get("siteAddress1", ""),
                 address2=row.get("siteAddress2", ""),
                 city=row.get("siteCity", ""),
@@ -217,6 +365,7 @@ class ProfitSwordAdapter(DataSourceAdapter):
                 zip_code=row.get("siteZip", ""),
             )
             for row in data
+            if row.get("siteTag") not in ("TMP1", "TMP2")
         ]
 
     async def fetch_datasets(self) -> list[DataSetInfo]:
@@ -224,7 +373,7 @@ class ProfitSwordAdapter(DataSourceAdapter):
         data = await self._get("DataSets", {})
         return [
             DataSetInfo(
-                dataset_id=row.get("dataSetID", 0),
+                dataset_id=row.get("fcid", 0),
                 description=row.get("description", ""),
             )
             for row in data
@@ -234,15 +383,21 @@ class ProfitSwordAdapter(DataSourceAdapter):
 
     @staticmethod
     def _parse_date(value: str) -> date | None:
-        """Parse date from ProfitSword response (multiple formats)."""
+        """Parse date from ProfitSword response.
+
+        API returns dates as ISO format: '2026-02-15T00:00:00'
+        """
         if not value:
             return None
-        for fmt in ("%m/%d/%Y", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d"):
-            try:
-                from datetime import datetime
-                return datetime.strptime(value.split("T")[0] if "T" in value else value, fmt.split("T")[0]).date()
-            except ValueError:
-                continue
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+        except (ValueError, TypeError):
+            pass
+        # Fallback: try MM/dd/yyyy
+        try:
+            return datetime.strptime(value, "%m/%d/%Y").date()
+        except (ValueError, TypeError):
+            pass
         logger.warning(f"Unparseable date: {value}")
         return None
 
@@ -255,3 +410,24 @@ def _dollars_to_cents(value) -> int:
     if value is None:
         return 0
     return int(round(float(value) * 100))
+
+
+def _stat_to_units(value) -> int | None:
+    """Convert a stat value to integer units (rooms, hours, etc.).
+
+    Returns None if stat is 0 or missing (most stat fields are unused).
+    """
+    if value is None:
+        return None
+    val = float(value)
+    if val == 0:
+        return None
+    # Store as integer (multiply by 100 for fractional precision)
+    return int(round(val * 100))
+
+
+def _strip_site_prefix(name: str) -> str:
+    """Strip 'x' prefix from site names (indicates inactive/legacy)."""
+    if name and name.startswith("x"):
+        return name[1:]
+    return name

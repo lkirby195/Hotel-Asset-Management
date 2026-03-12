@@ -13,9 +13,9 @@ class Settings(BaseSettings):
     profitsword_base_url: str = "https://ksl.profitsage.net/PS-Handlers"
     profitsword_username: str = ""
     profitsword_password: str = ""
-    profitsword_dataset_actuals: int = 0
-    profitsword_dataset_budget: int = 0
-    profitsword_dataset_forecast: int = 0
+    profitsword_dataset_actuals: int = -3
+    profitsword_dataset_budget: int = 2
+    profitsword_dataset_forecast: int = 1
 
     environment: str = "development"
     log_level: str = "INFO"
