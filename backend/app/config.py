@@ -10,8 +10,12 @@ class Settings(BaseSettings):
     clerk_publishable_key: str = ""
     clerk_jwks_url: str = "https://api.clerk.com/v1/jwks"
 
-    profitsword_api_url: str = ""
-    profitsword_api_key: str = ""
+    profitsword_base_url: str = "https://ksl.profitsage.net/PS-Handlers"
+    profitsword_username: str = ""
+    profitsword_password: str = ""
+    profitsword_dataset_actuals: int = 0
+    profitsword_dataset_budget: int = 0
+    profitsword_dataset_forecast: int = 0
 
     environment: str = "development"
     log_level: str = "INFO"

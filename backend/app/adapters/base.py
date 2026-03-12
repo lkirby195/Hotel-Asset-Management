@@ -1,13 +1,13 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 
 @dataclass
 class RawActualRecord:
-    property_code: str
+    property_code: str  # siteTag
     date: date
-    account_code: str
+    account_code: str  # internal line_item code (after mapping)
     value: int  # cents
     per_unit_value: int | None = None
 
@@ -30,6 +30,23 @@ class RawForecastRecord:
     value: int  # cents
 
 
+@dataclass
+class SiteInfo:
+    site_tag: str
+    site_name: str
+    address1: str = ""
+    address2: str = ""
+    city: str = ""
+    state: str = ""
+    zip_code: str = ""
+
+
+@dataclass
+class DataSetInfo:
+    dataset_id: int
+    description: str
+
+
 class DataSourceAdapter(ABC):
     """Abstract base for data source integrations (ProfitSword, Opera, M3, etc.)."""
 
@@ -50,3 +67,11 @@ class DataSourceAdapter(ABC):
         self, property_codes: list[str], year: int
     ) -> list[RawForecastRecord]:
         ...
+
+    async def fetch_sites(self) -> list[SiteInfo]:
+        """Fetch available properties/sites. Optional — not all adapters support this."""
+        return []
+
+    async def fetch_datasets(self) -> list[DataSetInfo]:
+        """Fetch available datasets. Optional — not all adapters support this."""
+        return []

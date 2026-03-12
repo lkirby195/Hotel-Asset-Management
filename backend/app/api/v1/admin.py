@@ -104,3 +104,46 @@ async def delete_user(
         raise HTTPException(status_code=404, detail="User not found")
 
     await user_service.delete_user(db, user)
+
+
+# --- ProfitSword Discovery ---
+
+@router.get("/profitsword/datasets")
+async def list_datasets(
+    current_user: User = Depends(require_role("admin")),
+):
+    """Fetch available ProfitSword dataset IDs. Use these to configure .env."""
+    from app.tasks.sync_actuals import _get_adapter
+    adapter = _get_adapter()
+    try:
+        datasets = await adapter.fetch_datasets()
+        return APIResponse(data=[
+            {"dataset_id": ds.dataset_id, "description": ds.description}
+            for ds in datasets
+        ])
+    finally:
+        if hasattr(adapter, "close"):
+            await adapter.close()
+
+
+@router.get("/profitsword/sites")
+async def list_sites(
+    current_user: User = Depends(require_role("admin")),
+):
+    """Fetch available ProfitSword sites/properties."""
+    from app.tasks.sync_actuals import _get_adapter
+    adapter = _get_adapter()
+    try:
+        sites = await adapter.fetch_sites()
+        return APIResponse(data=[
+            {
+                "site_tag": s.site_tag,
+                "site_name": s.site_name,
+                "city": s.city,
+                "state": s.state,
+            }
+            for s in sites
+        ])
+    finally:
+        if hasattr(adapter, "close"):
+            await adapter.close()

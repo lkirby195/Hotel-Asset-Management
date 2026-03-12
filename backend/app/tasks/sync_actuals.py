@@ -19,7 +19,7 @@ def _get_sync_engine():
 
 def _get_adapter():
     """Get the data source adapter (ProfitSword or Mock)."""
-    if settings.environment == "development" and not settings.profitsword_api_key:
+    if settings.environment == "development" and not settings.profitsword_username:
         from app.adapters.mock_adapter import MockAdapter
         return MockAdapter()
 
@@ -27,9 +27,13 @@ def _get_adapter():
     from app.adapters.profitsword import ProfitSwordAdapter
     mapping = MappingEngine.default()
     return ProfitSwordAdapter(
-        base_url=settings.profitsword_api_url,
-        api_key=settings.profitsword_api_key,
+        base_url=settings.profitsword_base_url,
+        username=settings.profitsword_username,
+        password=settings.profitsword_password,
         mapping=mapping,
+        dataset_actuals=settings.profitsword_dataset_actuals,
+        dataset_budget=settings.profitsword_dataset_budget,
+        dataset_forecast=settings.profitsword_dataset_forecast,
     )
 
 
