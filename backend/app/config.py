@@ -8,7 +8,7 @@ class Settings(BaseSettings):
 
     clerk_secret_key: str = ""
     clerk_publishable_key: str = ""
-    clerk_jwks_url: str = "https://api.clerk.com/v1/jwks"
+    clerk_jwks_url: str = "https://frank-monkfish-9.clerk.accounts.dev/.well-known/jwks.json"
 
     profitsword_base_url: str = "https://ksl.profitsage.net/PS-Handlers"
     profitsword_username: str = ""
@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     profitsword_dataset_actuals: int = -3
     profitsword_dataset_budget: int = 2
     profitsword_dataset_forecast: int = 1
+
+    dev_auth_bypass: bool = False
 
     environment: str = "development"
     log_level: str = "INFO"

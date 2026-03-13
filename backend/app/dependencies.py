@@ -22,8 +22,10 @@ async def get_current_user_claims(request: Request) -> dict:
     special ``X-Dev-User-Email`` header to bypass JWT verification.
     This NEVER activates in production.
     """
-    # --- Dev bypass: no Clerk key configured ---------------------------------
-    if settings.environment == "development" and not settings.clerk_secret_key:
+    # --- Dev bypass: explicit flag or no Clerk key configured -----------------
+    if settings.environment == "development" and (
+        settings.dev_auth_bypass or not settings.clerk_secret_key
+    ):
         dev_email = request.headers.get("X-Dev-User-Email")
         if dev_email:
             logger.warning("DEV AUTH BYPASS: using X-Dev-User-Email=%s", dev_email)

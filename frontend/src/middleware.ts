@@ -6,7 +6,10 @@ const isProtectedRoute = createRouteMatcher([
   "/admin(.*)",
 ]);
 
+const devAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
+
 export default clerkMiddleware(async (auth, req) => {
+  if (devAuthBypass) return;
   if (isProtectedRoute(req)) {
     await auth.protect();
   }
