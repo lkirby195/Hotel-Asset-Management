@@ -5,16 +5,8 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-const currencyFormatter = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
-export function formatCurrency(cents: number): string {
-  return currencyFormatter.format(cents / 100);
-}
+// Re-export formatters for backward compatibility with existing components
+export { formatCurrency, formatVarianceCurrency } from "./formatters";
 
 export function formatPercent(value: number | null): string {
   if (value === null || value === undefined) return "—";

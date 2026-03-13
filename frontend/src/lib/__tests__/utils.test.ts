@@ -19,8 +19,12 @@ describe("formatCurrency", () => {
     expect(formatCurrency(49)).toBe("$0");
   });
 
-  it("formats large values with commas", () => {
-    expect(formatCurrency(1234567800)).toBe("$12,345,678");
+  it("abbreviates large values (M for millions)", () => {
+    expect(formatCurrency(1234567800)).toBe("$12.3M");
+  });
+
+  it("abbreviates values over 10K", () => {
+    expect(formatCurrency(5000000)).toBe("$50K");
   });
 });
 
