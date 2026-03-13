@@ -57,9 +57,15 @@ export function GoalGauge({
   const needleX = cx + (r - 10) * Math.cos(needleAngle);
   const needleY = cy - (r - 10) * Math.sin(needleAngle);
 
+  // Tick marks at 25%, 50%, 75% — lines cut through the full arc width
+  const ticks = [0.25, 0.5, 0.75];
+  const tickInner = r - 10;  // inside the arc
+  const tickOuter = r + 10;  // outside the arc
+  const labelRadius = r + 20;
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 text-center">
-      <svg viewBox="0 0 200 115" className="mx-auto w-[200px] h-[110px]">
+      <svg viewBox="0 -5 200 120" className="mx-auto w-[200px] h-[115px]">
         {/* Background arc */}
         <path
           d={`M ${bgStartX} ${bgStartY} A ${r} ${r} 0 0 1 ${bgEndX} ${bgEndY}`}
@@ -78,6 +84,36 @@ export function GoalGauge({
             strokeLinecap="round"
           />
         )}
+        {/* Tick marks and labels (rendered on top of arcs) */}
+        {ticks.map((pct) => {
+          const angle = Math.PI - pct * Math.PI;
+          const x1 = cx + tickInner * Math.cos(angle);
+          const y1 = cy - tickInner * Math.sin(angle);
+          const x2 = cx + tickOuter * Math.cos(angle);
+          const y2 = cy - tickOuter * Math.sin(angle);
+          const lx = cx + labelRadius * Math.cos(angle);
+          const ly = cy - labelRadius * Math.sin(angle);
+          return (
+            <g key={pct}>
+              <line
+                x1={x1} y1={y1} x2={x2} y2={y2}
+                stroke="#6B7280"
+                strokeWidth={2.5}
+                strokeLinecap="round"
+              />
+              <text
+                x={lx} y={ly}
+                textAnchor="middle"
+                dominantBaseline="central"
+                fill="#6B7280"
+                fontSize={9}
+                fontWeight={700}
+              >
+                {pct * 100}%
+              </text>
+            </g>
+          );
+        })}
         {/* Needle */}
         <line
           x1={cx}

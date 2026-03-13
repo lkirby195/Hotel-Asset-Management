@@ -15,7 +15,7 @@ export function PropertySelector() {
 
   return (
     <Select
-      value={selectedPropertyId ?? undefined}
+      value={selectedPropertyId ?? ""}
       onValueChange={(v) => v && setSelectedPropertyId(v)}
       disabled={isLoading}
     >
