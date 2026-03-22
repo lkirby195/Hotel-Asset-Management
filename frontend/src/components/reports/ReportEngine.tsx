@@ -4,8 +4,7 @@ import { useState, useCallback } from "react";
 import { ReportTable } from "./ReportTable";
 import { TableSkeleton } from "@/components/shared/LoadingSkeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
-import { useChildRows } from "@/hooks/useReportData";
-import type { ReportData, ReportRow } from "@/types/reports";
+import type { ReportData, ReportRow, ComparisonType } from "@/types/reports";
 
 interface ReportEngineProps {
   data: ReportData | null;
@@ -15,6 +14,7 @@ interface ReportEngineProps {
   customStart?: string;
   customEnd?: string;
   showForecast?: boolean;
+  activeComparisons?: Set<ComparisonType>;
 }
 
 export function ReportEngine({
@@ -23,6 +23,7 @@ export function ReportEngine({
   propertyId,
   period,
   showForecast = false,
+  activeComparisons,
 }: ReportEngineProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [childRowsMap, setChildRowsMap] = useState<Map<string, ReportRow[]>>(
@@ -64,6 +65,7 @@ export function ReportEngine({
       showForecast={showForecast}
       propertyId={propertyId}
       period={period}
+      activeComparisons={activeComparisons}
     />
   );
 }

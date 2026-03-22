@@ -9,6 +9,7 @@ export function cn(...inputs: ClassValue[]) {
 export { formatCurrency, formatVarianceCurrency } from "./formatters";
 
 export function formatPercent(value: number | null): string {
-  if (value === null || value === undefined) return "—";
-  return `${value >= 0 ? "+" : ""}${value.toFixed(1)}%`;
+  if (value === null || value === undefined) return "\u2014";
+  if (value < 0) return `(${Math.abs(value).toFixed(1)}%)`;
+  return `+${value.toFixed(1)}%`;
 }

@@ -42,3 +42,47 @@ export function GaugeSkeleton() {
     </div>
   );
 }
+
+export function PaceMatrixSkeleton() {
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-gray-100 px-3 py-3 flex gap-4">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton key={i} className="h-4 w-20" />
+        ))}
+      </div>
+      <div className="divide-y divide-gray-100">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i} className="px-3 py-3 flex gap-4">
+            <Skeleton className="h-5 w-24" />
+            {Array.from({ length: 6 }).map((_, j) => (
+              <Skeleton key={j} className="h-5 w-20" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function PortfolioTableSkeleton() {
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+      <div className="bg-gray-100 px-3 py-3 flex gap-6">
+        {Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton key={i} className="h-4 w-16" />
+        ))}
+      </div>
+      <div className="divide-y divide-gray-100">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="px-3 py-3 flex gap-6">
+            <Skeleton className="h-5 w-32" />
+            {Array.from({ length: 7 }).map((_, j) => (
+              <Skeleton key={j} className="h-5 w-16" />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

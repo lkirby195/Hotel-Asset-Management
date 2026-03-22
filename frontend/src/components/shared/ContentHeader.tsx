@@ -8,6 +8,7 @@ interface ContentHeaderProps {
   subtitle?: string;
   showPropertySelector?: boolean;
   children?: ReactNode;
+  lastSynced?: string;
 }
 
 export function ContentHeader({
@@ -15,6 +16,7 @@ export function ContentHeader({
   subtitle,
   showPropertySelector = true,
   children,
+  lastSynced,
 }: ContentHeaderProps) {
   return (
     <div className="space-y-3">
@@ -27,7 +29,19 @@ export function ContentHeader({
         </div>
         {showPropertySelector && <PropertySelector />}
       </div>
-      {children && <div className="flex items-center justify-between">{children}</div>}
+      {children && (
+        <div className="flex items-center gap-4 bg-white border border-gray-200 rounded-lg px-3 py-2">
+          {children}
+          {lastSynced && (
+            <>
+              <div className="h-6 w-px bg-gray-200 ml-auto" />
+              <span className="text-xs text-gray-400 whitespace-nowrap">
+                Last synced: {lastSynced}
+              </span>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }

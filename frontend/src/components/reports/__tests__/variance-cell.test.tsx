@@ -25,7 +25,7 @@ describe("VarianceCell", () => {
     renderInTable(
       <VarianceCell value={-10000} percentage={-12.5} dataType="revenue" />
     );
-    const cell = screen.getByText("-$100").closest("td");
+    const cell = screen.getByText("($100)").closest("td");
     expect(cell).toHaveClass("text-red-700");
   });
 
@@ -33,7 +33,7 @@ describe("VarianceCell", () => {
     renderInTable(
       <VarianceCell value={-5000} percentage={-10.0} dataType="expense" />
     );
-    const cell = screen.getByText("-$50").closest("td");
+    const cell = screen.getByText("($50)").closest("td");
     expect(cell).toHaveClass("text-green-700");
   });
 

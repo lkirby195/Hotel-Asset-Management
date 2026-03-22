@@ -2,6 +2,7 @@
 
 import { ReportRow } from "./ReportRow";
 import type { ReportRow as ReportRowType } from "@/types/reports";
+import type { ComparisonType } from "@/types/reports";
 
 interface ReportTableProps {
   rows: ReportRowType[];
@@ -12,6 +13,7 @@ interface ReportTableProps {
   showForecast: boolean;
   propertyId: string;
   period: string;
+  activeComparisons?: Set<ComparisonType>;
 }
 
 export function ReportTable({
@@ -23,40 +25,106 @@ export function ReportTable({
   showForecast,
   propertyId,
   period,
+  activeComparisons,
 }: ReportTableProps) {
+  const comparisons = activeComparisons ?? new Set<ComparisonType>(["budget"]);
+  const hasBudget = comparisons.has("budget");
+  const hasForecast = comparisons.has("forecast_lock") || showForecast;
+  const hasStly = comparisons.has("stly");
+
+  // Count variance columns for colspan calculations
+  const varianceColCount =
+    (hasBudget ? 2 : 0) + (hasForecast ? 2 : 0) + (hasStly ? 2 : 0);
+
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
+    <div className="overflow-x-auto rounded-lg border border-gray-200 bg-white">
       <table className="w-full">
         <thead>
-          <tr className="border-b bg-surface text-xs font-medium uppercase tracking-wide text-gray-500">
-            <th className="px-3 py-3 text-left" style={{ width: "28%" }}>
+          <tr className="border-b-2 border-gray-200 bg-gray-100 text-xs font-medium uppercase tracking-wide text-gray-500">
+            {/* Data zone */}
+            <th
+              className="px-3 py-2.5 text-left sticky left-0 bg-gray-100 z-10"
+              style={{ minWidth: 200 }}
+            >
               Line item
             </th>
-            <th className="px-3 py-3 text-right" style={{ width: "12%" }}>
+            <th
+              className="px-3 py-2.5 text-right whitespace-nowrap"
+              style={{ minWidth: 100 }}
+            >
               Actual
             </th>
-            <th className="px-3 py-3 text-right" style={{ width: "12%" }}>
-              Budget
-            </th>
-            <th className="px-3 py-3 text-right" style={{ width: "10%" }}>
-              Var $
-            </th>
-            <th className="px-3 py-3 text-right" style={{ width: "8%" }}>
-              Var %
-            </th>
-            <th className="px-3 py-3 text-right" style={{ width: "12%" }}>
-              PY actual
-            </th>
-            <th className="px-3 py-3 text-right" style={{ width: "10%" }}>
-              PY var $
-            </th>
-            {showForecast && (
+            {hasBudget && (
+              <th
+                className="px-3 py-2.5 text-right whitespace-nowrap"
+                style={{ minWidth: 100 }}
+              >
+                Budget
+              </th>
+            )}
+            {hasForecast && (
+              <th
+                className="px-3 py-2.5 text-right whitespace-nowrap"
+                style={{ minWidth: 100 }}
+              >
+                Fcst Lock
+              </th>
+            )}
+            {hasStly && (
+              <th
+                className="px-3 py-2.5 text-right whitespace-nowrap"
+                style={{ minWidth: 100 }}
+              >
+                STLY
+              </th>
+            )}
+
+            {/* Variance zone - separated by border */}
+            {hasBudget && (
               <>
-                <th className="px-3 py-3 text-right" style={{ width: "10%" }}>
-                  Forecast
+                <th
+                  className="px-3 py-2.5 text-right whitespace-nowrap border-l-2 border-gray-200"
+                  style={{ minWidth: 100 }}
+                >
+                  Bgt Var $
                 </th>
-                <th className="px-3 py-3 text-right" style={{ width: "10%" }}>
-                  Fcst var $
+                <th
+                  className="px-3 py-2.5 text-right whitespace-nowrap"
+                  style={{ minWidth: 70 }}
+                >
+                  Bgt Var %
+                </th>
+              </>
+            )}
+            {hasForecast && (
+              <>
+                <th
+                  className={`px-3 py-2.5 text-right whitespace-nowrap${!hasBudget ? " border-l-2 border-gray-200" : ""}`}
+                  style={{ minWidth: 100 }}
+                >
+                  Fcst Var $
+                </th>
+                <th
+                  className="px-3 py-2.5 text-right whitespace-nowrap"
+                  style={{ minWidth: 70 }}
+                >
+                  Fcst Var %
+                </th>
+              </>
+            )}
+            {hasStly && (
+              <>
+                <th
+                  className={`px-3 py-2.5 text-right whitespace-nowrap${!hasBudget && !hasForecast ? " border-l-2 border-gray-200" : ""}`}
+                  style={{ minWidth: 100 }}
+                >
+                  PY Var $
+                </th>
+                <th
+                  className="px-3 py-2.5 text-right whitespace-nowrap"
+                  style={{ minWidth: 70 }}
+                >
+                  PY Var %
                 </th>
               </>
             )}
@@ -73,7 +141,9 @@ export function ReportTable({
               childRowsMap={childRowsMap}
               onToggleRow={onToggleRow}
               onChildrenLoaded={onChildrenLoaded}
-              showForecast={showForecast}
+              showForecast={hasForecast}
+              hasBudget={hasBudget}
+              hasStly={hasStly}
               propertyId={propertyId}
               period={period}
             />

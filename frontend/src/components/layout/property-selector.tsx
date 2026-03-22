@@ -20,7 +20,12 @@ export function PropertySelector() {
       disabled={isLoading}
     >
       <SelectTrigger className="w-64">
-        <SelectValue placeholder="Select a property..." />
+        <SelectValue placeholder="Select a property...">
+          {(value: string | null) => {
+            const p = properties.find((prop) => prop.id === value);
+            return p ? `${p.name} (${p.code})` : "Select a property...";
+          }}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {properties.map((p) => (

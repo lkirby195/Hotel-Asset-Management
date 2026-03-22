@@ -2,6 +2,10 @@ import type { DepartmentType } from './users';
 
 export type PeriodType = 'mtd' | 'qtd' | 'ytd' | 't28' | 'weekly' | 'custom';
 
+export type ComparisonType = 'budget' | 'forecast_lock' | 'stly';
+
+export type DisplayFormat = 'currency' | 'percentage' | 'integer' | 'decimal';
+
 export interface PeriodSelection {
   type: PeriodType;
   start_date?: string;
@@ -18,6 +22,7 @@ export interface LineItem {
   is_summary: boolean;
   data_type: 'revenue' | 'expense' | 'metric' | 'percentage';
   has_children: boolean;
+  display_format?: DisplayFormat;
 }
 
 export interface ReportRow {

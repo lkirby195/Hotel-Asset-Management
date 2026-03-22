@@ -1,78 +1,108 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { ReportTable } from "../report-table";
-import type { ReportLineItem } from "@/lib/types";
+import { ReportTable } from "../ReportTable";
+import type { ReportRow } from "@/types/reports";
 
-// Mock the AccordionRow component since it has hook dependencies
-vi.mock("../accordion-row", () => ({
-  AccordionRow: ({ line }: { line: ReportLineItem }) => (
-    <tr data-testid={`row-${line.code}`}>
-      <td>{line.name}</td>
+// Mock the ReportRow component since it has hook dependencies
+vi.mock("../ReportRow", () => ({
+  ReportRow: ({ row }: { row: ReportRow }) => (
+    <tr data-testid={`row-${row.line_item.code}`}>
+      <td>{row.line_item.name}</td>
     </tr>
   ),
 }));
 
-const mockLines: ReportLineItem[] = [
+const mockRows: ReportRow[] = [
   {
-    id: "1",
-    code: "room_revenue",
-    name: "Room Revenue",
-    parent_id: null,
-    is_summary: true,
-    data_type: "revenue",
-    sort_order: 1,
-    depth: 0,
+    line_item: {
+      id: "1",
+      code: "room_revenue",
+      name: "Room Revenue",
+      parent_id: null,
+      department_type: null,
+      sort_order: 1,
+      is_summary: true,
+      data_type: "revenue",
+      has_children: true,
+    },
     actual: 100000,
     budget: 80000,
-    variance_dollars: 20000,
-    variance_pct: 25.0,
+    variance_dollar: 20000,
+    variance_percent: 0.25,
     prior_year_actual: 90000,
-    py_variance_dollars: 10000,
-    py_variance_pct: 11.1,
+    py_variance_dollar: 10000,
+    py_variance_percent: 0.111,
   },
   {
-    id: "2",
-    code: "fb_total",
-    name: "F&B Revenue",
-    parent_id: null,
-    is_summary: true,
-    data_type: "revenue",
-    sort_order: 2,
-    depth: 0,
+    line_item: {
+      id: "2",
+      code: "fb_total",
+      name: "F&B Revenue",
+      parent_id: null,
+      department_type: null,
+      sort_order: 2,
+      is_summary: true,
+      data_type: "revenue",
+      has_children: true,
+    },
     actual: 50000,
     budget: 60000,
-    variance_dollars: -10000,
-    variance_pct: -16.7,
-    prior_year_actual: null,
-    py_variance_dollars: null,
-    py_variance_pct: null,
+    variance_dollar: -10000,
+    variance_percent: -0.167,
+    prior_year_actual: 0,
+    py_variance_dollar: 0,
+    py_variance_percent: 0,
   },
 ];
 
+const defaultProps = {
+  rows: mockRows,
+  expandedRows: new Set<string>(),
+  childRowsMap: new Map<string, ReportRow[]>(),
+  onToggleRow: vi.fn(),
+  onChildrenLoaded: vi.fn(),
+  showForecast: false,
+  propertyId: "test-property",
+  period: "mtd",
+};
+
 describe("ReportTable", () => {
-  it("renders loading skeleton when isLoading", () => {
-    render(<ReportTable lines={[]} period="mtd" isLoading={true} />);
-    expect(screen.queryByText("Line Item")).not.toBeInTheDocument();
-  });
-
-  it("renders empty state when no lines", () => {
-    render(<ReportTable lines={[]} period="mtd" isLoading={false} />);
-    expect(screen.getByText("No data available for the selected period.")).toBeInTheDocument();
-  });
-
-  it("renders table headers", () => {
-    render(<ReportTable lines={mockLines} period="mtd" isLoading={false} />);
-    expect(screen.getByText("Line Item")).toBeInTheDocument();
+  it("renders table headers with budget active by default", () => {
+    render(<ReportTable {...defaultProps} />);
+    expect(screen.getByText("Line item")).toBeInTheDocument();
     expect(screen.getByText("Actual")).toBeInTheDocument();
     expect(screen.getByText("Budget")).toBeInTheDocument();
-    expect(screen.getByText("Variance")).toBeInTheDocument();
-    expect(screen.getByText("Prior Year")).toBeInTheDocument();
-    expect(screen.getByText("PY Variance")).toBeInTheDocument();
+    expect(screen.getByText("Bgt Var $")).toBeInTheDocument();
+    expect(screen.getByText("Bgt Var %")).toBeInTheDocument();
   });
 
   it("renders rows for each line item", () => {
-    render(<ReportTable lines={mockLines} period="mtd" isLoading={false} />);
+    render(<ReportTable {...defaultProps} />);
     expect(screen.getByTestId("row-room_revenue")).toBeInTheDocument();
     expect(screen.getByTestId("row-fb_total")).toBeInTheDocument();
+  });
+
+  it("shows STLY columns when stly comparison is active", () => {
+    render(
+      <ReportTable
+        {...defaultProps}
+        activeComparisons={new Set(["budget", "stly"])}
+      />
+    );
+    expect(screen.getByText("STLY")).toBeInTheDocument();
+    expect(screen.getByText("PY Var $")).toBeInTheDocument();
+    expect(screen.getByText("PY Var %")).toBeInTheDocument();
+  });
+
+  it("shows forecast columns when forecast_lock comparison is active", () => {
+    render(
+      <ReportTable
+        {...defaultProps}
+        activeComparisons={new Set(["forecast_lock"])}
+      />
+    );
+    expect(screen.getByText("Fcst Lock")).toBeInTheDocument();
+    expect(screen.getByText("Fcst Var $")).toBeInTheDocument();
+    expect(screen.getByText("Fcst Var %")).toBeInTheDocument();
   });
 });

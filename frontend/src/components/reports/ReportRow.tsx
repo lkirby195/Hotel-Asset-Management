@@ -3,7 +3,12 @@
 import { useEffect } from "react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { formatCurrency, formatVarianceCurrency, formatVariancePercent, getVarianceColor } from "@/lib/formatters";
+import {
+  formatCurrency,
+  formatVarianceCurrency,
+  formatVariancePercent,
+  getVarianceColor,
+} from "@/lib/formatters";
 import { useChildRows } from "@/hooks/useReportData";
 import type { ReportRow as ReportRowType } from "@/types/reports";
 
@@ -16,6 +21,8 @@ interface ReportRowProps {
   onToggleRow: (id: string) => void;
   onChildrenLoaded: (parentId: string, children: ReportRowType[]) => void;
   showForecast: boolean;
+  hasBudget: boolean;
+  hasStly: boolean;
   propertyId: string;
   period: string;
 }
@@ -29,6 +36,8 @@ export function ReportRow({
   onToggleRow,
   onChildrenLoaded,
   showForecast,
+  hasBudget,
+  hasStly,
   propertyId,
   period,
 }: ReportRowProps) {
@@ -49,8 +58,30 @@ export function ReportRow({
 
   const cachedChildren = childRowsMap.get(line_item.id);
   const dataType = line_item.data_type;
-  const isChild = depth > 0;
   const namePaddingLeft = 12 + depth * 24;
+
+  // Three-tier hierarchy
+  const isTier1 = depth === 0 && line_item.is_summary;
+  const isTier2 = depth > 0 && line_item.is_summary;
+
+  // Total columns for loading indicator colspan
+  const totalCols =
+    2 +
+    (hasBudget ? 1 : 0) +
+    (showForecast ? 1 : 0) +
+    (hasStly ? 1 : 0) +
+    (hasBudget ? 2 : 0) +
+    (showForecast ? 2 : 0) +
+    (hasStly ? 2 : 0);
+
+  // First variance group gets border-l-2
+  const firstVarianceGroup = hasBudget
+    ? "budget"
+    : showForecast
+      ? "forecast"
+      : hasStly
+        ? "stly"
+        : null;
 
   return (
     <>
@@ -58,13 +89,20 @@ export function ReportRow({
         className={cn(
           "transition-colors",
           canExpand && "cursor-pointer hover:bg-gray-50",
-          line_item.is_summary && "font-medium",
-          depth === 0 && line_item.is_summary && "bg-gray-50/50"
+          isTier1 && "font-medium bg-gray-100 border-t-2 border-gray-200",
+          isTier2 && "font-medium",
+          !isTier1 && !isTier2 && "font-normal text-gray-700"
         )}
         onClick={() => canExpand && onToggleRow(line_item.id)}
       >
         {/* Name */}
-        <td className="px-3 py-2" style={{ paddingLeft: `${namePaddingLeft}px` }}>
+        <td
+          className={cn(
+            "px-3 py-2 sticky left-0 z-10",
+            isTier1 ? "bg-gray-100" : "bg-white"
+          )}
+          style={{ paddingLeft: `${namePaddingLeft}px`, minWidth: 200 }}
+        >
           <div className="flex items-center gap-2">
             {canExpand &&
               (isExpanded ? (
@@ -72,75 +110,62 @@ export function ReportRow({
               ) : (
                 <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
               ))}
-            <span
-              className={cn(
-                isChild && !line_item.is_summary && "text-xs text-gray-500",
-                !isChild && "text-sm text-gray-900"
-              )}
-            >
-              {line_item.name}
-            </span>
+            <span className="text-sm">{line_item.name}</span>
           </div>
         </td>
 
         {/* Actual */}
-        <td className={cn("px-3 py-2 text-right tabular-nums", isChild && "text-xs")}>
+        <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm">
           {formatCurrency(row.actual)}
         </td>
 
-        {/* Budget */}
-        <td className={cn("px-3 py-2 text-right tabular-nums", isChild && "text-xs")}>
-          {formatCurrency(row.budget)}
-        </td>
-
-        {/* Variance $ */}
-        <td
-          className={cn(
-            "px-3 py-2 text-right tabular-nums",
-            isChild && "text-xs",
-            getVarianceColor(row.variance_dollar, dataType)
-          )}
-        >
-          {formatVarianceCurrency(row.variance_dollar)}
-        </td>
-
-        {/* Variance % */}
-        <td
-          className={cn(
-            "px-3 py-2 text-right tabular-nums",
-            isChild && "text-xs",
-            getVarianceColor(row.variance_dollar, dataType)
-          )}
-        >
-          {formatVariancePercent(row.variance_percent)}
-        </td>
-
-        {/* PY Actual */}
-        <td className={cn("px-3 py-2 text-right tabular-nums", isChild && "text-xs")}>
-          {formatCurrency(row.prior_year_actual)}
-        </td>
-
-        {/* PY Var $ */}
-        <td
-          className={cn(
-            "px-3 py-2 text-right tabular-nums",
-            isChild && "text-xs",
-            getVarianceColor(row.py_variance_dollar, dataType)
-          )}
-        >
-          {formatVarianceCurrency(row.py_variance_dollar)}
-        </td>
-
-        {/* Forecast columns (month-end only) */}
+        {/* Data zone: comparison values */}
+        {hasBudget && (
+          <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm">
+            {formatCurrency(row.budget)}
+          </td>
+        )}
         {showForecast && (
+          <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm">
+            {row.forecast != null ? formatCurrency(row.forecast) : "-"}
+          </td>
+        )}
+        {hasStly && (
+          <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm">
+            {formatCurrency(row.prior_year_actual)}
+          </td>
+        )}
+
+        {/* Variance zone: budget var $ and % */}
+        {hasBudget && (
           <>
-            <td className={cn("px-3 py-2 text-right tabular-nums", isChild && "text-xs")}>
-              {row.forecast != null ? formatCurrency(row.forecast) : "\u2014"}
+            <td
+              className={cn(
+                "px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm",
+                firstVarianceGroup === "budget" && "border-l-2 border-gray-200",
+                getVarianceColor(row.variance_dollar, dataType)
+              )}
+            >
+              {formatVarianceCurrency(row.variance_dollar)}
             </td>
             <td
               className={cn(
-                "px-3 py-2 text-right tabular-nums",
-                isChild && "text-xs",
+                "px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm",
+                getVarianceColor(row.variance_dollar, dataType)
+              )}
+            >
+              {formatVariancePercent(row.variance_percent)}
+            </td>
+          </>
+        )}
+
+        {/* Variance zone: forecast var $ and % */}
+        {showForecast && (
+          <>
+            <td
+              className={cn(
+                "px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm",
+                firstVarianceGroup === "forecast" && "border-l-2 border-gray-200",
                 row.forecast_variance_dollar != null
                   ? getVarianceColor(row.forecast_variance_dollar, dataType)
                   : "text-gray-400"
@@ -148,7 +173,42 @@ export function ReportRow({
             >
               {row.forecast_variance_dollar != null
                 ? formatVarianceCurrency(row.forecast_variance_dollar)
-                : "\u2014"}
+                : "-"}
+            </td>
+            <td
+              className={cn(
+                "px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm",
+                row.forecast_variance_dollar != null
+                  ? getVarianceColor(row.forecast_variance_dollar, dataType)
+                  : "text-gray-400"
+              )}
+            >
+              {row.forecast_variance_percent != null
+                ? formatVariancePercent(row.forecast_variance_percent)
+                : "-"}
+            </td>
+          </>
+        )}
+
+        {/* Variance zone: STLY var $ and % */}
+        {hasStly && (
+          <>
+            <td
+              className={cn(
+                "px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm",
+                firstVarianceGroup === "stly" && "border-l-2 border-gray-200",
+                getVarianceColor(row.py_variance_dollar, dataType)
+              )}
+            >
+              {formatVarianceCurrency(row.py_variance_dollar)}
+            </td>
+            <td
+              className={cn(
+                "px-3 py-2 text-right tabular-nums whitespace-nowrap text-sm",
+                getVarianceColor(row.py_variance_dollar, dataType)
+              )}
+            >
+              {formatVariancePercent(row.py_variance_percent)}
             </td>
           </>
         )}
@@ -157,7 +217,7 @@ export function ReportRow({
       {/* Loading indicator */}
       {isExpanded && childrenLoading && !cachedChildren && (
         <tr>
-          <td colSpan={showForecast ? 9 : 7} className="py-2 text-center">
+          <td colSpan={totalCols} className="py-2 text-center">
             <Loader2 className="mx-auto h-4 w-4 animate-spin text-gray-400" />
           </td>
         </tr>
@@ -176,6 +236,8 @@ export function ReportRow({
             onToggleRow={onToggleRow}
             onChildrenLoaded={onChildrenLoaded}
             showForecast={showForecast}
+            hasBudget={hasBudget}
+            hasStly={hasStly}
             propertyId={propertyId}
             period={period}
           />

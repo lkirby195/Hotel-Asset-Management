@@ -30,6 +30,6 @@ describe("CurrencyCell", () => {
 
   it("renders negative value", () => {
     renderInTable(<CurrencyCell value={-50000} />);
-    expect(screen.getByText("-$500")).toBeInTheDocument();
+    expect(screen.getByText("($500)")).toBeInTheDocument();
   });
 });

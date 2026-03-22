@@ -2,14 +2,19 @@ import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
 const isProtectedRoute = createRouteMatcher([
   "/dashboard(.*)",
-  "/inter-month(.*)",
-  "/pace(.*)",
-  "/month-end(.*)",
-  "/executive(.*)",
-  "/sales(.*)",
+  "/performance(.*)",
+  "/pl(.*)",
+  "/portfolio(.*)",
+  "/sales-performance(.*)",
   "/departments(.*)",
   "/admin(.*)",
   "/reports(.*)",
+  // Legacy redirects
+  "/inter-month(.*)",
+  "/month-end(.*)",
+  "/executive(.*)",
+  "/pace(.*)",
+  "/sales(.*)",
 ]);
 
 const devAuthBypass = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
