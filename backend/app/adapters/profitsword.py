@@ -23,6 +23,7 @@ from app.adapters.base import (
     RawActualRecord,
     RawBudgetRecord,
     RawForecastRecord,
+    RawOTBRecord,
     SiteInfo,
 )
 from app.adapters.mapping import MappingEngine
@@ -34,6 +35,16 @@ DATASET_ACTUALS = -3
 DATASET_BUDGET = 2
 DATASET_FORECAST = 1
 DATASET_OTB = -5
+
+# Revenue account codes for OTB aggregation. Only these tags contribute to
+# the revenue total; other mapped tags (occupancy stats, KPIs, labor/expense
+# codes) are ignored to avoid inflating revenue.
+_OTB_REVENUE_CODES = {
+    "room_revenue",
+    "transient_revenue",
+    "group_revenue",
+    "other_room_revenue",
+}
 
 
 class ProfitSwordAdapter(DataSourceAdapter):
@@ -347,6 +358,68 @@ class ProfitSwordAdapter(DataSourceAdapter):
                     logger.error(f"Forecast month {month} failed for {site_tag}: {e}")
 
         logger.info(f"Fetched {len(records)} forecast records")
+        return records
+
+    # ── Public API: fetch_otb ────────────────────────────────────
+
+    async def fetch_otb(
+        self, property_codes: list[str], start_date: date, end_date: date
+    ) -> list[RawOTBRecord]:
+        """Fetch on-the-books data via DailyExtended (dataSetID=-5).
+
+        Same pattern as fetch_daily_actuals but returns RawOTBRecord
+        with rooms from stat field and revenue from amt field.
+        """
+        records: list[RawOTBRecord] = []
+
+        for site_tag in property_codes:
+            try:
+                data = await self._fetch_daily_extended(
+                    site_tag, start_date, end_date, DATASET_OTB
+                )
+
+                # Aggregate all itemTags into one record per site per date.
+                # Key: (site_tag, date) -> {rooms, revenue}
+                agg: dict[tuple[str, date], dict] = {}
+                for row in data:
+                    item_tag = str(row.get("itemTag", ""))
+                    internal_code = self.mapping.translate(item_tag)
+                    if not internal_code:
+                        continue
+
+                    row_date = self._parse_date(row.get("date", ""))
+                    if not row_date:
+                        row_date = end_date
+
+                    key = (site_tag, row_date)
+                    if key not in agg:
+                        agg[key] = {"rooms": 0, "revenue": 0}
+
+                    # Only sum revenue from tags that represent actual revenue.
+                    # The mapping config includes non-revenue tags (available_rooms,
+                    # occupied_rooms, adr, revpar, labor codes, expense codes, etc.)
+                    # that would incorrectly inflate the revenue total if included.
+                    if internal_code == "rooms_sold":
+                        agg[key]["rooms"] += int(round(float(row.get("stat", 0))))
+                    elif internal_code in _OTB_REVENUE_CODES:
+                        agg[key]["revenue"] += _dollars_to_cents(row.get("amt"))
+
+                for (st, dt), vals in agg.items():
+                    rooms = vals["rooms"]
+                    revenue = vals["revenue"]
+                    adr = revenue // rooms if rooms else 0
+                    records.append(RawOTBRecord(
+                        property_code=st,
+                        date=dt,
+                        rooms=rooms,
+                        revenue=revenue,
+                        adr=adr,
+                    ))
+
+            except httpx.HTTPError as e:
+                logger.error(f"DailyExtended OTB failed for {site_tag}: {e}")
+
+        logger.info(f"Fetched {len(records)} OTB records from {len(property_codes)} sites")
         return records
 
     # ── Discovery endpoints ────────────────────────────────────────

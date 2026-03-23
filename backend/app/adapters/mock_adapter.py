@@ -8,6 +8,7 @@ from app.adapters.base import (
     RawActualRecord,
     RawBudgetRecord,
     RawForecastRecord,
+    RawOTBRecord,
 )
 
 # Internal line item codes that the mock generates data for
@@ -105,6 +106,29 @@ class MockAdapter(DataSourceAdapter):
                         account_code=item_code,
                         value=monthly,
                     ))
+        return records
+
+    async def fetch_otb(
+        self, property_codes: list[str], start_date: date, end_date: date
+    ) -> list[RawOTBRecord]:
+        """Generate deterministic mock OTB data for forward-looking dates."""
+        records = []
+        current = start_date
+        while current <= end_date:
+            for code in property_codes:
+                day_seed = hash(f"{code}:otb:{current.isoformat()}")
+                rng = random.Random(day_seed)
+                rooms = rng.randint(80, 150)
+                revenue = rng.randint(40000_00, 70000_00)
+                adr = revenue // rooms if rooms else 0
+                records.append(RawOTBRecord(
+                    property_code=code,
+                    date=current,
+                    rooms=rooms,
+                    revenue=revenue,
+                    adr=adr,
+                ))
+            current += timedelta(days=1)
         return records
 
     async def fetch_forecasts(
