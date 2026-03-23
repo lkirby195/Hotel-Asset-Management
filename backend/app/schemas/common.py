@@ -1,8 +1,22 @@
+from enum import Enum
 from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
 T = TypeVar("T")
+
+
+class TimePeriod(str, Enum):
+    daily = "daily"
+    weekly = "weekly"
+    monthly = "monthly"
+    mtd = "mtd"
+    qtd = "qtd"
+    ytd = "ytd"
+    t28 = "t28"
+    rest_of_year = "rest_of_year"
+    annual = "annual"
+    custom = "custom"
 
 
 class ErrorDetail(BaseModel):

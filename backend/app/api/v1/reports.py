@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache.redis_client import get_redis
 from app.dependencies import get_current_user, get_db_session, require_property_access
 from app.models.user import User
-from app.schemas.common import APIResponse
+from app.schemas.common import APIResponse, TimePeriod
 from app.schemas.report import InterMonthResponse, ReportLineItem
 from app.services.cache_service import CacheService
 from app.services.property_service import PropertyService
@@ -25,14 +25,15 @@ property_service = PropertyService()
 )
 async def inter_month_report(
     property_id: uuid.UUID = Depends(require_property_access),
-    period: str = Query(default="mtd", pattern="^(mtd|qtd|ytd|t28|custom|weekly)$"),
+    period: TimePeriod = Query(default=TimePeriod.monthly),
     start: date | None = Query(default=None),
     end: date | None = Query(default=None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
     redis_client: redis.Redis = Depends(get_redis),
 ):
-    if period == "custom" and (not start or not end):
+
+    if period == TimePeriod.custom and (not start or not end):
         raise HTTPException(status_code=400, detail="Custom period requires start and end dates")
 
     prop = await property_service.get_property(db, property_id)
@@ -60,7 +61,7 @@ async def inter_month_report(
 async def inter_month_children(
     parent_id: uuid.UUID,
     property_id: uuid.UUID = Depends(require_property_access),
-    period: str = Query(default="mtd", pattern="^(mtd|qtd|ytd|t28|custom|weekly)$"),
+    period: TimePeriod = Query(default=TimePeriod.monthly),
     start: date | None = Query(default=None),
     end: date | None = Query(default=None),
     current_user: User = Depends(get_current_user),
