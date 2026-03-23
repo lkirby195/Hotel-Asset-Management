@@ -1,4 +1,5 @@
 export * from './api';
+export * from './dashboard';
 export * from './users';
 export * from './reports';
 export * from './pace';
