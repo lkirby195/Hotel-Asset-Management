@@ -11,7 +11,7 @@ describe("formatCurrency", () => {
   });
 
   it("formats negative values", () => {
-    expect(formatCurrency(-50050)).toBe("-$501");
+    expect(formatCurrency(-50050)).toBe("($501)");
   });
 
   it("rounds to whole dollars", () => {
@@ -34,7 +34,7 @@ describe("formatPercent", () => {
   });
 
   it("formats negative percentage", () => {
-    expect(formatPercent(-15.3)).toBe("-15.3%");
+    expect(formatPercent(-15.3)).toBe("(15.3%)");
   });
 
   it("formats zero with plus sign", () => {
