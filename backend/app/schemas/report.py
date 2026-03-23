@@ -17,6 +17,7 @@ class ReportLineItem(BaseModel):
     budget: int  # cents
     variance_dollars: int
     variance_pct: float | None
+    forecast_lock: int | None
     prior_year_actual: int | None
     py_variance_dollars: int | None
     py_variance_pct: float | None

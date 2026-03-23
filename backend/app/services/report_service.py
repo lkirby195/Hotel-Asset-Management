@@ -76,16 +76,20 @@ class ReportService:
         # Fetch prior year data
         leaf_py = await self._fetch_prior_year(db, property_id, eff_start, eff_end)
 
+        # Fetch forecast lock data
+        leaf_fl = await self._fetch_forecast_lock(db, property_id, eff_start, eff_end)
+
         # Roll up leaf values to all ancestor summary items
         actuals = await self._rollup_to_summaries(db, leaf_actuals)
         budget_data = await self._rollup_to_summaries(db, leaf_budgets)
         py_data = await self._rollup_to_summaries(db, leaf_py)
+        fl_data = await self._rollup_to_summaries(db, leaf_fl)
 
         # Fetch top-level (summary) line items
         line_items = await self._fetch_line_items(db, parent_id=None, summary_only=True)
 
         # Build response
-        lines = self._build_lines(line_items, actuals, budget_data, py_data, depth=0)
+        lines = self._build_lines(line_items, actuals, budget_data, py_data, fl_data, depth=0)
 
         response = InterMonthResponse(
             property_id=property_id,
@@ -136,13 +140,15 @@ class ReportService:
         leaf_actuals = await self._fetch_actuals(db, property_id, period, start_date, end_date)
         leaf_budgets = await self._fetch_budget_data(db, property_id, eff_start, eff_end)
         leaf_py = await self._fetch_prior_year(db, property_id, eff_start, eff_end)
+        leaf_fl = await self._fetch_forecast_lock(db, property_id, eff_start, eff_end)
 
         actuals = await self._rollup_to_summaries(db, leaf_actuals)
         budget_data = await self._rollup_to_summaries(db, leaf_budgets)
         py_data = await self._rollup_to_summaries(db, leaf_py)
+        fl_data = await self._rollup_to_summaries(db, leaf_fl)
 
         child_items = await self._fetch_line_items(db, parent_id=parent_id, summary_only=False)
-        lines = self._build_lines(child_items, actuals, budget_data, py_data, depth=1)
+        lines = self._build_lines(child_items, actuals, budget_data, py_data, fl_data, depth=1)
 
         if cache:
             await cache.set(
@@ -254,6 +260,46 @@ class ReportService:
 
         return budget_map
 
+    async def _fetch_forecast_lock(
+        self,
+        db: AsyncSession,
+        property_id: uuid.UUID,
+        start_date: date,
+        end_date: date,
+    ) -> dict[uuid.UUID, int]:
+        """Returns prorated forecast lock {line_item_id: prorated_value_cents}.
+
+        Same proration logic as _fetch_budget_data: monthly values are prorated
+        for partial months within the date range.
+        """
+        query = text("""
+            SELECT line_item_id, year, month, value
+            FROM forecast_locks
+            WHERE property_id = :property_id
+              AND (year * 100 + month) >= :start_ym
+              AND (year * 100 + month) <= :end_ym
+        """)
+        result = await db.execute(query, {
+            "property_id": property_id,
+            "start_ym": start_date.year * 100 + start_date.month,
+            "end_ym": end_date.year * 100 + end_date.month,
+        })
+
+        lock_map: dict[uuid.UUID, int] = {}
+        for row in result.fetchall():
+            days_in_month = calendar.monthrange(row.year, row.month)[1]
+
+            month_start = date(row.year, row.month, 1)
+            month_end = date(row.year, row.month, days_in_month)
+            range_start = max(month_start, start_date)
+            range_end = min(month_end, end_date)
+            days_in_range = (range_end - range_start).days + 1
+
+            prorated = int(row.value * days_in_range / days_in_month)
+            lock_map[row.line_item_id] = lock_map.get(row.line_item_id, 0) + prorated
+
+        return lock_map
+
     async def _fetch_prior_year(
         self,
         db: AsyncSession,
@@ -342,13 +388,15 @@ class ReportService:
         actuals: dict[uuid.UUID, int],
         budgets: dict[uuid.UUID, int],
         prior_year: dict[uuid.UUID, int],
-        depth: int,
+        forecast_lock: dict[uuid.UUID, int] | None = None,
+        depth: int = 0,
     ) -> list[ReportLineItem]:
         lines = []
         for item in line_items:
             actual = actuals.get(item.id, 0)
             budget = budgets.get(item.id, 0)
             py_actual = prior_year.get(item.id)
+            fl_value = forecast_lock.get(item.id) if forecast_lock else None
 
             variance_dollars = actual - budget
             variance_pct = round((variance_dollars / budget) * 100, 2) if budget != 0 else None
@@ -373,6 +421,7 @@ class ReportService:
                 budget=budget,
                 variance_dollars=variance_dollars,
                 variance_pct=variance_pct,
+                forecast_lock=fl_value,
                 prior_year_actual=py_actual,
                 py_variance_dollars=py_variance_dollars,
                 py_variance_pct=py_variance_pct,

@@ -6,6 +6,7 @@ from app.models.daily_actual import DailyActual
 from app.models.monthly_actual import MonthlyActual
 from app.models.budget import Budget
 from app.models.forecast import Forecast
+from app.models.forecast_lock import ForecastLock
 from app.models.month_close import MonthCloseStatus
 from app.models.user import User, user_properties
 
@@ -19,6 +20,7 @@ __all__ = [
     "MonthlyActual",
     "Budget",
     "Forecast",
+    "ForecastLock",
     "MonthCloseStatus",
     "User",
     "user_properties",
