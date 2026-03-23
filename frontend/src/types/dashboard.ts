@@ -16,3 +16,27 @@ export interface YesterdayResponse {
   date: string;
   kpis: YesterdayKPI[];
 }
+
+export interface MTDPaceRow {
+  metric_name: string;
+  actual: number;
+  budget: number;
+  stly: number;
+  forecast_lock: number;
+  vs_budget: number;
+  vs_budget_pct: number | null;
+  vs_stly: number;
+  vs_stly_pct: number | null;
+  vs_forecast: number;
+  unit: 'currency' | 'percentage' | 'integer';
+}
+
+export interface MTDPaceResponse {
+  property_id: string;
+  property_name: string;
+  period_start: string;
+  period_end: string;
+  days_elapsed: number;
+  days_in_month: number;
+  rows: MTDPaceRow[];
+}
