@@ -50,7 +50,7 @@ def lock_monthly_forecast(self, tenant_id: str, year: int | None = None, month: 
             adapter = _get_adapter()
 
             # Fetch forecasts for the target year
-            forecast_records = asyncio.get_event_loop().run_until_complete(
+            forecast_records = asyncio.run(
                 adapter.fetch_forecasts(list(property_map.keys()), year)
             )
 
