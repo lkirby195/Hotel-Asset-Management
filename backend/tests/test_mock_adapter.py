@@ -83,6 +83,57 @@ class TestMockAdapter:
         records = await adapter.fetch_daily_actuals([], date(2026, 3, 1), date(2026, 3, 1))
         assert records == []
 
+    async def test_fetch_otb_returns_records(self, adapter):
+        records = await adapter.fetch_otb(
+            property_codes=["PROP1"],
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 1),
+        )
+        assert len(records) > 0
+        assert all(r.property_code == "PROP1" for r in records)
+        assert all(r.date == date(2026, 4, 1) for r in records)
+
+    async def test_fetch_otb_multi_property(self, adapter):
+        records = await adapter.fetch_otb(
+            property_codes=["PROP1", "PROP2"],
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 1),
+        )
+        codes = {r.property_code for r in records}
+        assert codes == {"PROP1", "PROP2"}
+
+    async def test_fetch_otb_deterministic(self, adapter):
+        r1 = await adapter.fetch_otb(["PROP1"], date(2026, 4, 1), date(2026, 4, 1))
+        adapter2 = MockAdapter(seed=42)
+        r2 = await adapter2.fetch_otb(["PROP1"], date(2026, 4, 1), date(2026, 4, 1))
+        assert len(r1) == len(r2)
+        for a, b in zip(r1, r2):
+            assert a.rooms == b.rooms
+            assert a.revenue == b.revenue
+            assert a.adr == b.adr
+
+    async def test_fetch_otb_values_positive(self, adapter):
+        records = await adapter.fetch_otb(["PROP1"], date(2026, 4, 1), date(2026, 4, 3))
+        for r in records:
+            assert r.rooms > 0
+            assert r.revenue > 0
+            assert r.adr > 0
+
+    async def test_fetch_otb_multi_day(self, adapter):
+        records = await adapter.fetch_otb(
+            property_codes=["PROP1"],
+            start_date=date(2026, 4, 1),
+            end_date=date(2026, 4, 3),
+        )
+        dates = {r.date for r in records}
+        assert date(2026, 4, 1) in dates
+        assert date(2026, 4, 2) in dates
+        assert date(2026, 4, 3) in dates
+
+    async def test_fetch_otb_empty_property_list(self, adapter):
+        records = await adapter.fetch_otb([], date(2026, 4, 1), date(2026, 4, 1))
+        assert records == []
+
     async def test_record_account_codes_are_strings(self, adapter):
         records = await adapter.fetch_daily_actuals(["P1"], date(2026, 3, 1), date(2026, 3, 1))
         for r in records:

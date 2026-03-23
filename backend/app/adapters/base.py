@@ -31,6 +31,15 @@ class RawForecastRecord:
 
 
 @dataclass
+class RawOTBRecord:
+    property_code: str
+    date: date
+    rooms: int
+    revenue: int  # cents
+    adr: int  # cents
+
+
+@dataclass
 class SiteInfo:
     site_tag: str
     site_name: str
@@ -72,6 +81,12 @@ class DataSourceAdapter(ABC):
     async def fetch_forecasts(
         self, property_codes: list[str], year: int
     ) -> list[RawForecastRecord]:
+        ...
+
+    @abstractmethod
+    async def fetch_otb(
+        self, property_codes: list[str], start_date: date, end_date: date
+    ) -> list[RawOTBRecord]:
         ...
 
     async def fetch_sites(self) -> list[SiteInfo]:
