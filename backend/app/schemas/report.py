@@ -30,3 +30,4 @@ class InterMonthResponse(BaseModel):
     start_date: date
     end_date: date
     lines: list[ReportLineItem]
+    note: str | None = None

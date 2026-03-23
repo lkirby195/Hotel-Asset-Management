@@ -1,12 +1,13 @@
 import calendar
 import uuid
-from datetime import date
+from datetime import date, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache.keys import report_cache_key, report_children_cache_key
 from app.models.line_item import LineItem
+from app.schemas.common import TimePeriod
 from app.schemas.report import InterMonthResponse, ReportLineItem
 from app.services.cache_service import CacheService
 
@@ -28,47 +29,81 @@ class ReportService:
         db: AsyncSession,
         property_id: uuid.UUID,
         property_name: str,
-        period: str,
+        period: str | TimePeriod,
         start_date: date | None,
         end_date: date | None,
         cache: CacheService | None,
         tenant_id: uuid.UUID,
     ) -> InterMonthResponse:
         today = date.today()
+        period_val = period.value if isinstance(period, TimePeriod) else period
+        # Map public "monthly" to internal "mtd"
+        if period_val == "monthly":
+            period_val = "mtd"
 
         # Determine effective date range for response metadata
-        if period == "custom" and start_date and end_date:
-            eff_start, eff_end = start_date, end_date
-        elif period == "mtd":
-            eff_start = today.replace(day=1)
-            eff_end = today
-        elif period == "qtd":
-            quarter_month = ((today.month - 1) // 3) * 3 + 1
-            eff_start = today.replace(month=quarter_month, day=1)
-            eff_end = today
-        elif period == "ytd":
-            eff_start = today.replace(month=1, day=1)
-            eff_end = today
-        elif period == "t28":
-            from datetime import timedelta
-            eff_start = today - timedelta(days=28)
-            eff_end = today
-        else:
-            eff_start = today.replace(day=1)
-            eff_end = today
+        match period_val:
+            case "custom" if start_date and end_date:
+                eff_start, eff_end = start_date, end_date
+            case "daily":
+                yesterday = today - timedelta(days=1)
+                eff_start = eff_end = start_date or yesterday
+            case "mtd" | "monthly":
+                eff_start = today.replace(day=1)
+                eff_end = today
+            case "qtd":
+                quarter_month = ((today.month - 1) // 3) * 3 + 1
+                eff_start = today.replace(month=quarter_month, day=1)
+                eff_end = today
+            case "ytd":
+                eff_start = today.replace(month=1, day=1)
+                eff_end = today
+            case "t28":
+                eff_start = today - timedelta(days=28)
+                eff_end = today
+            case "weekly":
+                eff_start = today - timedelta(days=today.weekday())
+                eff_end = today
+            case "rest_of_year":
+                if today.month == 12:
+                    return InterMonthResponse(
+                        property_id=property_id,
+                        property_name=property_name,
+                        period=period_val,
+                        start_date=today,
+                        end_date=today,
+                        lines=[],
+                        note="No remaining months in the current year.",
+                    )
+                eff_start = date(today.year, today.month + 1, 1)
+                eff_end = date(today.year, 12, 31)
+            case "annual":
+                eff_start = date(today.year, 1, 1)
+                eff_end = date(today.year, 12, 31)
+            case _:
+                eff_start = today.replace(day=1)
+                eff_end = today
 
         # Check cache
         if cache:
             cache_key = report_cache_key(
                 str(tenant_id), "inter_month", str(property_id),
-                period, str(eff_start), str(eff_end),
+                period_val, str(eff_start), str(eff_end),
             )
             cached = await cache.get(cache_key)
             if cached:
                 return InterMonthResponse(**cached)
 
         # Fetch leaf-level actuals from appropriate source
-        leaf_actuals = await self._fetch_actuals(db, property_id, period, start_date, end_date)
+        match period_val:
+            case "daily":
+                leaf_actuals = await self._fetch_daily_single(db, property_id, eff_start)
+            case "rest_of_year":
+                leaf_actuals = await self._fetch_rest_of_year(db, property_id)
+            case "annual":
+                leaf_actuals = await self._fetch_annual(db, property_id)
+            case _:
+                leaf_actuals = await self._fetch_actuals(db, property_id, period_val, start_date, end_date)
 
         # Fetch budget data (prorated for the period)
         leaf_budgets = await self._fetch_budget_data(db, property_id, eff_start, eff_end)
@@ -94,7 +129,7 @@ class ReportService:
         response = InterMonthResponse(
             property_id=property_id,
             property_name=property_name,
-            period=period,
+            period=period_val,
             start_date=eff_start,
             end_date=eff_end,
             lines=lines,
@@ -111,33 +146,73 @@ class ReportService:
         db: AsyncSession,
         property_id: uuid.UUID,
         parent_id: uuid.UUID,
-        period: str,
+        period: str | TimePeriod,
         start_date: date | None,
         end_date: date | None,
         cache: CacheService | None,
         tenant_id: uuid.UUID,
     ) -> list[ReportLineItem]:
         today = date.today()
+        period_val = period.value if isinstance(period, TimePeriod) else period
+        # Map public "monthly" to internal "mtd"
+        if period_val == "monthly":
+            period_val = "mtd"
 
-        if period == "custom" and start_date and end_date:
-            eff_start, eff_end = start_date, end_date
-        elif period == "mtd":
-            eff_start = today.replace(day=1)
-            eff_end = today
-        else:
-            eff_start = today.replace(day=1)
-            eff_end = today
+        # Determine effective date range (mirrors get_inter_month)
+        match period_val:
+            case "custom" if start_date and end_date:
+                eff_start, eff_end = start_date, end_date
+            case "daily":
+                yesterday = today - timedelta(days=1)
+                eff_start = eff_end = start_date or yesterday
+            case "mtd":
+                eff_start = today.replace(day=1)
+                eff_end = today
+            case "qtd":
+                quarter_month = ((today.month - 1) // 3) * 3 + 1
+                eff_start = today.replace(month=quarter_month, day=1)
+                eff_end = today
+            case "ytd":
+                eff_start = today.replace(month=1, day=1)
+                eff_end = today
+            case "t28":
+                eff_start = today - timedelta(days=28)
+                eff_end = today
+            case "weekly":
+                eff_start = today - timedelta(days=today.weekday())
+                eff_end = today
+            case "rest_of_year":
+                if today.month == 12:
+                    return []
+                eff_start = date(today.year, today.month + 1, 1)
+                eff_end = date(today.year, 12, 31)
+            case "annual":
+                eff_start = date(today.year, 1, 1)
+                eff_end = date(today.year, 12, 31)
+            case _:
+                eff_start = today.replace(day=1)
+                eff_end = today
 
         # Check cache
         if cache:
             cache_key = report_children_cache_key(
-                str(tenant_id), str(property_id), str(parent_id), period,
+                str(tenant_id), str(property_id), str(parent_id), period_val,
             )
             cached = await cache.get(cache_key)
             if cached:
                 return [ReportLineItem(**item) for item in cached]
 
-        leaf_actuals = await self._fetch_actuals(db, property_id, period, start_date, end_date)
+        # Fetch leaf-level actuals from appropriate source
+        match period_val:
+            case "daily":
+                leaf_actuals = await self._fetch_daily_single(db, property_id, eff_start)
+            case "rest_of_year":
+                leaf_actuals = await self._fetch_rest_of_year(db, property_id)
+            case "annual":
+                leaf_actuals = await self._fetch_annual(db, property_id)
+            case _:
+                leaf_actuals = await self._fetch_actuals(db, property_id, period_val, start_date, end_date)
+
         leaf_budgets = await self._fetch_budget_data(db, property_id, eff_start, eff_end)
         leaf_py = await self._fetch_prior_year(db, property_id, eff_start, eff_end)
         leaf_fl = await self._fetch_forecast_lock(db, property_id, eff_start, eff_end)
@@ -152,11 +227,93 @@ class ReportService:
 
         if cache:
             await cache.set(
-                report_children_cache_key(str(tenant_id), str(property_id), str(parent_id), period),
+                report_children_cache_key(str(tenant_id), str(property_id), str(parent_id), period_val),
                 [line.model_dump(mode="json") for line in lines],
             )
 
         return lines
+
+    async def _fetch_daily_single(
+        self,
+        db: AsyncSession,
+        property_id: uuid.UUID,
+        target_date: date,
+    ) -> dict[uuid.UUID, int]:
+        """Returns {line_item_id: value} for a single date from daily_actuals."""
+        query = text("""
+            SELECT line_item_id, value AS actual_value
+            FROM daily_actuals
+            WHERE property_id = :property_id
+              AND date = :target_date
+        """)
+        result = await db.execute(query, {
+            "property_id": property_id,
+            "target_date": target_date,
+        })
+        return {row.line_item_id: row.actual_value for row in result.fetchall()}
+
+    async def _fetch_rest_of_year(
+        self,
+        db: AsyncSession,
+        property_id: uuid.UUID,
+    ) -> dict[uuid.UUID, int]:
+        """Returns {line_item_id: total_forecast_value} for remaining months of the year.
+
+        Queries forecast_locks for months after the current month through December.
+        """
+        today = date.today()
+        start_month = today.month + 1
+        if start_month > 12:
+            return {}
+
+        query = text("""
+            SELECT line_item_id, SUM(value) AS actual_value
+            FROM forecast_locks
+            WHERE property_id = :property_id
+              AND year = :year
+              AND month >= :start_month
+              AND month <= 12
+            GROUP BY line_item_id
+        """)
+        result = await db.execute(query, {
+            "property_id": property_id,
+            "year": today.year,
+            "start_month": start_month,
+        })
+        return {row.line_item_id: row.actual_value for row in result.fetchall()}
+
+    async def _fetch_annual(
+        self,
+        db: AsyncSession,
+        property_id: uuid.UUID,
+    ) -> dict[uuid.UUID, int]:
+        """Returns {line_item_id: combined_value} combining YTD actuals + rest of year forecast."""
+        today = date.today()
+        ytd_start = date(today.year, 1, 1)
+
+        # Fetch YTD actuals (Jan 1 through today)
+        query = text("""
+            SELECT line_item_id, SUM(value) AS actual_value
+            FROM daily_actuals
+            WHERE property_id = :property_id
+              AND date >= :start_date AND date <= :end_date
+            GROUP BY line_item_id
+        """)
+        result = await db.execute(query, {
+            "property_id": property_id,
+            "start_date": ytd_start,
+            "end_date": today,
+        })
+        ytd = {row.line_item_id: row.actual_value for row in result.fetchall()}
+
+        # Fetch rest of year forecast
+        rest = await self._fetch_rest_of_year(db, property_id)
+
+        # Merge: sum where both have values
+        combined: dict[uuid.UUID, int] = dict(ytd)
+        for lid, val in rest.items():
+            combined[lid] = combined.get(lid, 0) + val
+        return combined
 
     async def _fetch_actuals(
         self,

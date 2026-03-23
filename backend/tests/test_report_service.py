@@ -2,10 +2,11 @@
 
 import uuid
 from datetime import date
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.schemas.common import TimePeriod
 from app.schemas.report import InterMonthResponse, ReportLineItem
 from app.services.report_service import ReportService
 from app.models.forecast_lock import ForecastLock
@@ -366,3 +367,115 @@ class TestForecastLock:
         )
 
         assert result.lines[0].forecast_lock == 90000
+
+
+class TestTimePeriodFetchMethods:
+    """Test _fetch_daily_single, _fetch_rest_of_year, and _fetch_annual."""
+
+    @pytest.fixture
+    def service(self):
+        return ReportService()
+
+    async def test_fetch_daily_single_returns_records_for_one_date(self, service, mock_db):
+        """_fetch_daily_single returns {line_item_id: value} for a single date."""
+        mock_row = MagicMock()
+        mock_row.line_item_id = LINE_ITEM_ID
+        mock_row.actual_value = 5000
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [mock_row]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result = await service._fetch_daily_single(mock_db, PROPERTY_ID, date(2026, 3, 22))
+
+        assert result == {LINE_ITEM_ID: 5000}
+        call_args = mock_db.execute.call_args
+        params = call_args[0][1]
+        assert params["target_date"] == date(2026, 3, 22)
+        assert params["property_id"] == PROPERTY_ID
+
+    async def test_fetch_daily_single_empty_when_no_data(self, service, mock_db):
+        """_fetch_daily_single returns empty dict when no records exist."""
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result = await service._fetch_daily_single(mock_db, PROPERTY_ID, date(2026, 3, 22))
+        assert result == {}
+
+    @patch("app.services.report_service.date")
+    async def test_fetch_rest_of_year_returns_forecast_for_remaining_months(
+        self, mock_date, service, mock_db,
+    ):
+        """_fetch_rest_of_year sums forecast_locks for months after current."""
+        mock_date.today.return_value = date(2026, 3, 23)
+        mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+
+        row1 = MagicMock()
+        row1.line_item_id = LINE_ITEM_ID
+        row1.actual_value = 270000  # sum of Apr-Dec forecast
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [row1]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result = await service._fetch_rest_of_year(mock_db, PROPERTY_ID)
+
+        assert result == {LINE_ITEM_ID: 270000}
+        call_args = mock_db.execute.call_args
+        params = call_args[0][1]
+        assert params["start_month"] == 4
+        assert params["year"] == 2026
+
+    @patch("app.services.report_service.date")
+    async def test_fetch_rest_of_year_empty_in_december(self, mock_date, service, mock_db):
+        """_fetch_rest_of_year returns empty dict when current month is December."""
+        mock_date.today.return_value = date(2026, 12, 15)
+        mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+
+        result = await service._fetch_rest_of_year(mock_db, PROPERTY_ID)
+        assert result == {}
+
+    @patch("app.services.report_service.date")
+    async def test_fetch_annual_combines_ytd_and_rest_of_year(self, mock_date, service, mock_db):
+        """_fetch_annual merges YTD actuals with rest-of-year forecast."""
+        mock_date.today.return_value = date(2026, 3, 23)
+        mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+
+        # First call: YTD actuals query
+        ytd_row = MagicMock()
+        ytd_row.line_item_id = LINE_ITEM_ID
+        ytd_row.actual_value = 100000
+        ytd_result = MagicMock()
+        ytd_result.fetchall.return_value = [ytd_row]
+
+        # Second call: rest_of_year forecast query
+        rest_row = MagicMock()
+        rest_row.line_item_id = LINE_ITEM_ID
+        rest_row.actual_value = 200000
+        rest_result = MagicMock()
+        rest_result.fetchall.return_value = [rest_row]
+
+        mock_db.execute = AsyncMock(side_effect=[ytd_result, rest_result])
+
+        result = await service._fetch_annual(mock_db, PROPERTY_ID)
+
+        # Should combine: 100000 (ytd) + 200000 (rest) = 300000
+        assert result[LINE_ITEM_ID] == 300000
+
+    @patch("app.services.report_service.date")
+    async def test_fetch_annual_ytd_only_when_no_forecast(self, mock_date, service, mock_db):
+        """_fetch_annual returns just YTD when no remaining forecast exists."""
+        mock_date.today.return_value = date(2026, 12, 20)
+        mock_date.side_effect = lambda *args, **kw: date(*args, **kw)
+
+        ytd_row = MagicMock()
+        ytd_row.line_item_id = LINE_ITEM_ID
+        ytd_row.actual_value = 500000
+        ytd_result = MagicMock()
+        ytd_result.fetchall.return_value = [ytd_row]
+
+        mock_db.execute = AsyncMock(return_value=ytd_result)
+
+        result = await service._fetch_annual(mock_db, PROPERTY_ID)
+        assert result[LINE_ITEM_ID] == 500000
