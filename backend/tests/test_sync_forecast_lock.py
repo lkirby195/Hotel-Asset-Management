@@ -1,7 +1,7 @@
 """Tests for the lock_monthly_forecast Celery task."""
 
 from datetime import date
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 
 import pytest
 
@@ -19,7 +19,7 @@ class TestDefaultMonthCalculation:
         mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
 
         adapter = MagicMock()
-        adapter.fetch_forecasts.return_value = []
+        adapter.fetch_forecasts = AsyncMock(return_value=[])
         mock_adapter.return_value = adapter
 
         session = MagicMock()
@@ -47,7 +47,7 @@ class TestDefaultMonthCalculation:
         mock_date.side_effect = lambda *a, **kw: date(*a, **kw)
 
         adapter = MagicMock()
-        adapter.fetch_forecasts.return_value = []
+        adapter.fetch_forecasts = AsyncMock(return_value=[])
         mock_adapter.return_value = adapter
 
         mock_session_cls = MagicMock()
