@@ -8,6 +8,7 @@ import pytest
 
 from app.schemas.report import InterMonthResponse, ReportLineItem
 from app.services.report_service import ReportService
+from app.models.forecast_lock import ForecastLock
 
 from tests.conftest import LINE_ITEM_ID, LINE_ITEM_ID_2, PARENT_LINE_ITEM_ID, PROPERTY_ID, TENANT_ID
 
@@ -166,6 +167,7 @@ class TestGetInterMonth:
         svc._fetch_actuals = AsyncMock(return_value={LINE_ITEM_ID: 100000})
         svc._fetch_budget_data = AsyncMock(return_value={LINE_ITEM_ID: 80000})
         svc._fetch_prior_year = AsyncMock(return_value={LINE_ITEM_ID: 90000})
+        svc._fetch_forecast_lock = AsyncMock(return_value={})
         # Mock rollup to pass through (leaf data already keyed by correct IDs)
         svc._rollup_to_summaries = AsyncMock(side_effect=lambda db, data: data)
 
@@ -258,3 +260,109 @@ class TestGetInterMonth:
         assert result.property_name == "Cached Hotel"
         # DB should not have been queried
         service._fetch_actuals.assert_not_called()
+
+
+class TestForecastLock:
+    """Test _fetch_forecast_lock and forecast lock integration in _build_lines."""
+
+    def _make_line_item(self, id, code, name, data_type="revenue", is_summary=True, sort_order=0, parent_id=None):
+        item = MagicMock()
+        item.id = id
+        item.code = code
+        item.name = name
+        item.data_type = data_type
+        item.is_summary = is_summary
+        item.sort_order = sort_order
+        item.parent_id = parent_id
+        return item
+
+    @pytest.fixture
+    def service(self):
+        return ReportService()
+
+    def test_build_lines_with_no_forecast_lock(self, service):
+        """forecast_lock field is None when no lock data exists."""
+        items = [self._make_line_item(LINE_ITEM_ID, "room_revenue", "Room Revenue")]
+        actuals = {LINE_ITEM_ID: 100000}
+        budgets = {LINE_ITEM_ID: 80000}
+
+        lines = service._build_lines(items, actuals, budgets, {}, forecast_lock={}, depth=0)
+        assert lines[0].forecast_lock is None
+
+    def test_build_lines_with_forecast_lock_value(self, service):
+        """forecast_lock field is populated when lock data exists for the line item."""
+        items = [self._make_line_item(LINE_ITEM_ID, "room_revenue", "Room Revenue")]
+        actuals = {LINE_ITEM_ID: 100000}
+        budgets = {LINE_ITEM_ID: 80000}
+        fl = {LINE_ITEM_ID: 95000}
+
+        lines = service._build_lines(items, actuals, budgets, {}, forecast_lock=fl, depth=0)
+        assert lines[0].forecast_lock == 95000
+
+    def test_build_lines_forecast_lock_none_when_omitted(self, service):
+        """forecast_lock defaults to None when forecast_lock dict is not passed."""
+        items = [self._make_line_item(LINE_ITEM_ID, "room_revenue", "Room Revenue")]
+        lines = service._build_lines(items, {LINE_ITEM_ID: 100000}, {}, {}, depth=0)
+        assert lines[0].forecast_lock is None
+
+    async def test_fetch_forecast_lock_empty_when_no_locks(self, service, mock_db):
+        """_fetch_forecast_lock returns empty dict when no locks exist."""
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = []
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result = await service._fetch_forecast_lock(
+            mock_db, PROPERTY_ID, date(2026, 3, 1), date(2026, 3, 23),
+        )
+        assert result == {}
+
+    async def test_fetch_forecast_lock_prorates_partial_month(self, service, mock_db):
+        """_fetch_forecast_lock prorates values for partial month coverage."""
+        mock_row = MagicMock()
+        mock_row.line_item_id = LINE_ITEM_ID
+        mock_row.year = 2026
+        mock_row.month = 3
+        mock_row.value = 310000  # $3100 for 31-day month -> $100/day
+
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [mock_row]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        # 10 days of a 31-day month
+        result = await service._fetch_forecast_lock(
+            mock_db, PROPERTY_ID, date(2026, 3, 1), date(2026, 3, 10),
+        )
+        expected = int(310000 * 10 / 31)
+        assert result[LINE_ITEM_ID] == expected
+
+    async def test_get_inter_month_includes_forecast_lock(self, mock_db):
+        """get_inter_month passes forecast lock data through to _build_lines."""
+        svc = ReportService()
+        svc._fetch_actuals = AsyncMock(return_value={LINE_ITEM_ID: 100000})
+        svc._fetch_budget_data = AsyncMock(return_value={LINE_ITEM_ID: 80000})
+        svc._fetch_prior_year = AsyncMock(return_value={})
+        svc._fetch_forecast_lock = AsyncMock(return_value={LINE_ITEM_ID: 90000})
+        svc._rollup_to_summaries = AsyncMock(side_effect=lambda db, data: data)
+
+        mock_item = MagicMock()
+        mock_item.id = LINE_ITEM_ID
+        mock_item.code = "room_revenue"
+        mock_item.name = "Room Revenue"
+        mock_item.data_type = "revenue"
+        mock_item.is_summary = True
+        mock_item.sort_order = 1
+        mock_item.parent_id = None
+        svc._fetch_line_items = AsyncMock(return_value=[mock_item])
+
+        result = await svc.get_inter_month(
+            db=mock_db,
+            property_id=PROPERTY_ID,
+            property_name="Test Hotel",
+            period="mtd",
+            start_date=None,
+            end_date=None,
+            cache=None,
+            tenant_id=TENANT_ID,
+        )
+
+        assert result.lines[0].forecast_lock == 90000
