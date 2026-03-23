@@ -6,6 +6,7 @@ import { GoalGrid } from "@/components/dashboard/GoalGrid";
 import { GoalDataTable } from "@/components/dashboard/GoalDataTable";
 import { GoalSelector } from "@/components/dashboard/GoalSelector";
 import { YesterdayKPIs } from "@/components/dashboard/YesterdayKPIs";
+import { MTDPaceTable } from "@/components/dashboard/MTDPaceTable";
 import { useGoals } from "@/hooks/useGoals";
 import { useProperty } from "@/providers/property-provider";
 import { GaugeSkeleton } from "@/components/shared/LoadingSkeleton";
@@ -41,6 +42,11 @@ export default function DashboardPage() {
       <section>
         <h2 className="text-sm font-medium text-gray-700 mb-3">Yesterday&apos;s Performance</h2>
         <YesterdayKPIs propertyId={selectedPropertyId} />
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-gray-700 mb-3">Month-to-Date Pace</h2>
+        <MTDPaceTable propertyId={selectedPropertyId} />
       </section>
 
       <section>
