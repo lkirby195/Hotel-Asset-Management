@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.base import DataSourceAdapter
 from app.schemas.dashboard import (
+    DeptSnapshotCard,
+    DeptSnapshotResponse,
     ForwardLookResponse,
     MTDPaceResponse,
     MTDPaceRow,
@@ -448,6 +450,199 @@ class DashboardService:
             summary_cards=summary_cards,
             daily_detail=daily_detail,
         )
+
+    # ── Department Snapshot Cards ────────────────────────────────────
+
+    # Department definitions: revenue/expense line-item codes and KPI specs
+    _DEPT_CONFIG = [
+        {
+            "name": "Rooms",
+            "revenue_codes": ["room_revenue", "other_room_revenue"],
+            "expense_codes": [
+                "rooms_labor", "rooms_ota_commissions", "rooms_supplies", "rooms_other_expense",
+            ],
+            "kpi1_label": "Margin %",
+            "kpi1_type": "margin_pct",
+            "kpi2_label": "Labor %",
+            "kpi2_type": "labor_pct",
+            "labor_code": "rooms_labor",
+        },
+        {
+            "name": "F&B",
+            "revenue_codes": ["food_revenue", "beverage_revenue", "catering_revenue"],
+            "expense_codes": ["fb_cost_of_sales", "fb_labor", "fb_other_expense"],
+            "kpi1_label": "Food Cost %",
+            "kpi1_type": "cost_pct",
+            "cost_code": "fb_cost_of_sales",
+            "kpi2_label": "Labor %",
+            "kpi2_type": "labor_pct",
+            "labor_code": "fb_labor",
+        },
+        {
+            "name": "Golf",
+            "revenue_codes": ["golf_greens_revenue", "golf_cart_revenue", "golf_pro_shop_revenue"],
+            "expense_codes": ["golf_labor", "golf_maintenance", "golf_other_expense"],
+            "kpi1_label": "Rounds",
+            "kpi1_type": "count",
+            "count_code": "golf_rounds",
+            "kpi2_label": "Rev/Round",
+            "kpi2_type": "rev_per_unit",
+        },
+        {
+            "name": "Mountain Ops",
+            "revenue_codes": ["mountain_lift_revenue", "mountain_other_revenue"],
+            "expense_codes": ["mountain_labor", "mountain_maintenance", "mountain_other_expense"],
+            "kpi1_label": "Skier Visits",
+            "kpi1_type": "count",
+            "count_code": "mountain_skier_visits",
+            "kpi2_label": "Rev/Visit",
+            "kpi2_type": "rev_per_unit",
+        },
+        {
+            "name": "Spa",
+            "revenue_codes": ["spa_services_revenue", "spa_retail_revenue"],
+            "expense_codes": ["spa_labor", "spa_cost_of_sales", "spa_other_expense"],
+            "kpi1_label": "Treatments",
+            "kpi1_type": "count",
+            "count_code": "spa_treatments",
+            "kpi2_label": "Rev/Treatment",
+            "kpi2_type": "rev_per_unit",
+        },
+        {
+            "name": "Retail",
+            "revenue_codes": ["retail_revenue"],
+            "expense_codes": ["retail_labor", "retail_cost_of_sales", "retail_other_expense"],
+            "kpi1_label": "Margin %",
+            "kpi1_type": "margin_pct",
+            "kpi2_label": "Labor %",
+            "kpi2_type": "labor_pct",
+            "labor_code": "retail_labor",
+        },
+    ]
+
+    async def get_dept_snapshots(
+        self,
+        db: AsyncSession,
+        property_id: uuid.UUID,
+        property_name: str,
+        period: str = "mtd",
+        target_date: date | None = None,
+    ) -> DeptSnapshotResponse:
+        if target_date is None:
+            target_date = date.today() - timedelta(days=1)
+
+        period_start, period_end = self._resolve_period_range(period, target_date)
+        year = period_start.year
+        month = period_start.month
+        days_elapsed = (period_end - period_start).days + 1
+        days_in_month = calendar.monthrange(year, month)[1]
+
+        actuals = await self._fetch_range_actuals(db, property_id, period_start, period_end)
+        budget_vals = await self._fetch_prorated_budget_range(
+            db, property_id, year, month, days_in_month, days_elapsed,
+        )
+
+        cards = []
+        for dept in self._DEPT_CONFIG:
+            card = self._build_dept_card(dept, actuals, budget_vals)
+            cards.append(card)
+
+        return DeptSnapshotResponse(
+            property_id=property_id,
+            property_name=property_name,
+            period=period,
+            cards=cards,
+        )
+
+    def _build_dept_card(
+        self,
+        dept: dict,
+        actuals: dict[str, float],
+        budget: dict[str, float],
+    ) -> DeptSnapshotCard:
+        revenue = sum(actuals.get(c, 0) for c in dept["revenue_codes"])
+        expenses = sum(actuals.get(c, 0) for c in dept["expense_codes"])
+        budget_revenue = sum(budget.get(c, 0) for c in dept["revenue_codes"])
+
+        count_code = dept.get("count_code")
+        has_data = (
+            revenue != 0
+            or expenses != 0
+            or (count_code is not None and actuals.get(count_code, 0) != 0)
+        )
+
+        variance_pct = None
+        if budget_revenue:
+            variance_pct = round((revenue - budget_revenue) / budget_revenue * 100, 1)
+
+        kpi1_value = self._compute_dept_kpi(dept, "kpi1", actuals, revenue, expenses)
+        kpi2_value = self._compute_dept_kpi(dept, "kpi2", actuals, revenue, expenses)
+
+        return DeptSnapshotCard(
+            dept_name=dept["name"],
+            revenue=int(revenue),
+            budget=int(budget_revenue),
+            variance_pct=variance_pct,
+            kpi1_label=dept["kpi1_label"],
+            kpi1_value=kpi1_value,
+            kpi2_label=dept["kpi2_label"],
+            kpi2_value=kpi2_value,
+            has_data=has_data,
+        )
+
+    @staticmethod
+    def _compute_dept_kpi(
+        dept: dict,
+        kpi_key: str,  # "kpi1" or "kpi2"
+        actuals: dict[str, float],
+        revenue: float,
+        expenses: float,
+    ) -> str:
+        kpi_type = dept[f"{kpi_key}_type"]
+
+        if kpi_type == "margin_pct":
+            if not revenue:
+                return "0.0%"
+            margin = (revenue - expenses) / revenue * 100
+            return f"{margin:.1f}%"
+
+        if kpi_type == "labor_pct":
+            labor_code = dept.get("labor_code", "")
+            labor = actuals.get(labor_code, 0)
+            if not revenue:
+                return "0.0%"
+            pct = labor / revenue * 100
+            return f"{pct:.1f}%"
+
+        if kpi_type == "cost_pct":
+            cost_code = dept.get("cost_code", "")
+            cost = actuals.get(cost_code, 0)
+            if not revenue:
+                return "0.0%"
+            pct = cost / revenue * 100
+            return f"{pct:.1f}%"
+
+        if kpi_type == "count":
+            count_code = dept.get("count_code", "")
+            count = actuals.get(count_code, 0)
+            return f"{int(count):,}"
+
+        if kpi_type == "rev_per_unit":
+            count_code = dept.get("count_code", "")
+            count = actuals.get(count_code, 0)
+            if not count:
+                return "$0"
+            per_unit = revenue / count / 100  # cents to dollars
+            return f"${per_unit:,.0f}"
+
+        return "N/A"
+
+    @staticmethod
+    def _resolve_period_range(period: str, target_date: date) -> tuple[date, date]:
+        """Return (start, end) for the given period string."""
+        if period == "mtd":
+            return date(target_date.year, target_date.month, 1), target_date
+        raise ValueError(f"Unsupported period: {period!r}")
 
     def _build_summary_card(
         self,

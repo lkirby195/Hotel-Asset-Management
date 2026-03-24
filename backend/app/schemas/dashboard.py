@@ -86,3 +86,25 @@ class ForwardLookResponse(BaseModel):
     available_rooms_per_night: int
     summary_cards: list[OTBSummaryCard]
     daily_detail: list[OTBDailyRow]
+
+
+# ── Department Snapshot Cards ─────────────────────────────────────
+
+
+class DeptSnapshotCard(BaseModel):
+    dept_name: str
+    revenue: int  # cents
+    budget: int  # cents
+    variance_pct: float | None
+    kpi1_label: str
+    kpi1_value: str  # pre-formatted
+    kpi2_label: str
+    kpi2_value: str  # pre-formatted
+    has_data: bool
+
+
+class DeptSnapshotResponse(BaseModel):
+    property_id: uuid.UUID
+    property_name: str
+    period: str
+    cards: list[DeptSnapshotCard]
