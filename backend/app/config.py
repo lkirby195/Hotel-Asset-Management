@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     profitsword_dataset_forecast: int = 1
 
     dev_auth_bypass: bool = False
+    frontend_url: str = ""
 
     environment: str = "development"
     log_level: str = "INFO"
