@@ -20,9 +20,15 @@ from app.schemas.dashboard import (
 
 
 # Line item codes for the KPIs we need
-_REVENUE_CODE = "room_revenue"
+# room_revenue may be a parent with no actuals — sum children instead
+_ROOM_REVENUE_CODES = ["room_revenue", "transient_revenue", "group_revenue", "other_room_revenue"]
 _ROOMS_SOLD_CODE = "rooms_sold"
 _AVAILABLE_ROOMS_CODE = "available_rooms"
+
+
+def _sum_room_revenue(vals: dict) -> float:
+    """Sum all room revenue codes (parent + children) from a values dict."""
+    return sum(vals.get(code, 0) for code in _ROOM_REVENUE_CODES)
 _TOTAL_REVENUE_CODE = "total_revenue"
 _LABOR_PATTERN = "%_labor"
 
@@ -44,7 +50,7 @@ class DashboardService:
         stly_actuals = await self._fetch_day_actuals(db, property_id, stly_date)
         budget_vals = await self._fetch_prorated_budget(db, property_id, target_date)
 
-        room_revenue = actuals.get(_REVENUE_CODE, 0)
+        room_revenue = _sum_room_revenue(actuals)
         rooms_sold = actuals.get(_ROOMS_SOLD_CODE, 0)
         available_rooms = actuals.get(_AVAILABLE_ROOMS_CODE, 0)
         total_labor = self._sum_labor(actuals)
@@ -53,7 +59,7 @@ class DashboardService:
         adr = (room_revenue / rooms_sold) if rooms_sold else 0.0
         revpar = (room_revenue / available_rooms) if available_rooms else 0.0
 
-        stly_room_revenue = stly_actuals.get(_REVENUE_CODE, 0)
+        stly_room_revenue = stly__sum_room_revenue(actuals)
         stly_rooms_sold = stly_actuals.get(_ROOMS_SOLD_CODE, 0)
         stly_available = stly_actuals.get(_AVAILABLE_ROOMS_CODE, 0)
         stly_labor = self._sum_labor(stly_actuals)
@@ -61,7 +67,7 @@ class DashboardService:
         stly_adr = (stly_room_revenue / stly_rooms_sold) if stly_rooms_sold else 0.0
         stly_revpar = (stly_room_revenue / stly_available) if stly_available else 0.0
 
-        budget_room_rev = budget_vals.get(_REVENUE_CODE, 0)
+        budget_room_rev = _sum_room_revenue(budget_vals)
         budget_rooms_sold = budget_vals.get(_ROOMS_SOLD_CODE, 0)
         budget_available = budget_vals.get(_AVAILABLE_ROOMS_CODE, 0)
         budget_labor = self._sum_labor(budget_vals)
@@ -211,7 +217,7 @@ class DashboardService:
         stly: dict[str, float],
         forecast: dict[str, float],
     ) -> list[MTDPaceRow]:
-        room_rev = actuals.get(_REVENUE_CODE, 0)
+        room_rev = _sum_room_revenue(actuals)
         rooms_sold = actuals.get(_ROOMS_SOLD_CODE, 0)
         available = actuals.get(_AVAILABLE_ROOMS_CODE, 0)
         total_rev = actuals.get(_TOTAL_REVENUE_CODE, 0)
@@ -222,7 +228,7 @@ class DashboardService:
         revpar = (room_rev / available) if available else 0.0
         labor_pct = (total_labor / total_rev) if total_rev else 0.0
 
-        b_room_rev = budget.get(_REVENUE_CODE, 0)
+        b_room_rev = _sum_room_revenue(budget)
         b_rooms_sold = budget.get(_ROOMS_SOLD_CODE, 0)
         b_available = budget.get(_AVAILABLE_ROOMS_CODE, 0)
         b_total_rev = budget.get(_TOTAL_REVENUE_CODE, 0)
@@ -232,7 +238,7 @@ class DashboardService:
         b_revpar = (b_room_rev / b_available) if b_available else 0.0
         b_labor_pct = (b_labor / b_total_rev) if b_total_rev else 0.0
 
-        s_room_rev = stly.get(_REVENUE_CODE, 0)
+        s_room_rev = _sum_room_revenue(stly)
         s_rooms_sold = stly.get(_ROOMS_SOLD_CODE, 0)
         s_available = stly.get(_AVAILABLE_ROOMS_CODE, 0)
         s_total_rev = stly.get(_TOTAL_REVENUE_CODE, 0)
@@ -242,7 +248,7 @@ class DashboardService:
         s_revpar = (s_room_rev / s_available) if s_available else 0.0
         s_labor_pct = (s_labor / s_total_rev) if s_total_rev else 0.0
 
-        f_room_rev = forecast.get(_REVENUE_CODE, 0)
+        f_room_rev = _sum_room_revenue(forecast)
         f_rooms_sold = forecast.get(_ROOMS_SOLD_CODE, 0)
         f_available = forecast.get(_AVAILABLE_ROOMS_CODE, 0)
         f_total_rev = forecast.get(_TOTAL_REVENUE_CODE, 0)
@@ -691,3 +697,4 @@ class DashboardService:
             budget_remaining=None,  # Budget integration deferred
             pickup_7day=None,  # Requires OTB snapshot history (see TODO above)
         )
+
