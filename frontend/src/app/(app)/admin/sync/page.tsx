@@ -7,7 +7,7 @@ import { MonthCloseToggle } from "@/components/admin/MonthCloseToggle";
 export default function AdminSyncPage() {
   return (
     <div className="space-y-8">
-      <ContentHeader title="Data sync" showPropertySelector={false} />
+      <ContentHeader title="Data sync" />
 
       <section className="space-y-4">
         <h2 className="text-base font-medium text-gray-900">Sync controls</h2>
