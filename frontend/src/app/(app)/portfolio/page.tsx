@@ -12,7 +12,7 @@ export default function PortfolioPage() {
 
   return (
     <div className="space-y-6">
-      <ContentHeader title="Portfolio" showPropertySelector={false}>
+      <ContentHeader title="Portfolio">
         <PeriodSelector
           selected={period}
           onChange={setPeriod}
