@@ -27,6 +27,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "https://hotel-asset-management.vercel.app",
+        settings.frontend_url,  # Configurable via env var
     ],
     allow_credentials=True,
     allow_methods=["*"],
