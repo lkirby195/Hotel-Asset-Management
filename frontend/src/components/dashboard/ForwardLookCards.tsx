@@ -1,17 +1,13 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@clerk/nextjs";
-import { createApiClient } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 import {
   formatCurrency,
   formatVarianceCurrency,
-  formatPercent,
 } from "@/lib/formatters";
+import { VarianceBadge } from "@/components/ui/variance-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { ForwardLookResponse, OTBSummaryCard } from "@/types/dashboard";
-import type { ApiResponse } from "@/types/api";
 
 interface ForwardLookCardsProps {
   propertyId: string;
@@ -20,76 +16,74 @@ interface ForwardLookCardsProps {
   error?: Error | null;
 }
 
-function varianceColor(value: number): string {
-  if (value === 0) return "text-gray-500";
-  return value > 0 ? "text-favorable" : "text-unfavorable";
-}
-
 function SummaryCard({ card }: { card: OTBSummaryCard }) {
   const startDate = new Date(card.date_start + "T00:00:00");
   const endDate = new Date(card.date_end + "T00:00:00");
-  const dateRange = `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+  const dateRange = `${startDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })} \u2013 ${endDate.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+
+  const stlyLabel = card.vs_stly_pct !== null
+    ? `${formatVarianceCurrency(card.vs_stly_revenue)} (${card.vs_stly_pct > 0 ? "+" : ""}${card.vs_stly_pct.toFixed(1)}%)`
+    : formatVarianceCurrency(card.vs_stly_revenue);
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-      <div>
-        <h3 className="text-sm font-semibold text-gray-900">{card.window_name}</h3>
-        <p className="text-xs text-gray-500">{dateRange} &middot; {card.nights} nights</p>
+    <div className="kpi-card bg-white rounded-xl border border-surface-200 p-5">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-xs font-semibold text-surface-500 uppercase tracking-wider">
+          {card.window_name}
+        </div>
+        <span className="text-xs text-surface-400">
+          {card.nights} nights
+        </span>
       </div>
 
-      {/* Primary OTB metrics */}
-      <div className="grid grid-cols-3 gap-3">
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-gray-500">OTB Revenue</p>
-          <p className="text-sm font-semibold text-gray-900 tabular-nums">
-            {formatCurrency(card.otb_revenue)}
-          </p>
+      <div className="space-y-3">
+        <div className="flex justify-between items-baseline">
+          <span className="text-sm text-surface-600">OTB Room Revenue</span>
+          <span className="text-lg font-bold tabular-nums">{formatCurrency(card.otb_revenue)}</span>
         </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-gray-500">OTB Occ</p>
-          <p className="text-sm font-semibold text-gray-900 tabular-nums">
-            {formatPercent(card.otb_occupancy)}
-          </p>
-        </div>
-        <div>
-          <p className="text-[10px] uppercase tracking-wide text-gray-500">OTB ADR</p>
-          <p className="text-sm font-semibold text-gray-900 tabular-nums">
-            {formatCurrency(card.otb_adr)}
-          </p>
-        </div>
-      </div>
-
-      {/* Comparison metrics */}
-      <div className="border-t border-gray-100 pt-2 space-y-1.5">
-        <div className="flex items-center justify-between text-xs">
-          <span className="text-gray-500">vs STLY</span>
-          <span className={cn("font-medium tabular-nums", varianceColor(card.vs_stly_revenue))}>
-            {formatVarianceCurrency(card.vs_stly_revenue)}
-            {card.vs_stly_pct !== null && (
-              <span className="ml-1 text-[10px]">
-                ({card.vs_stly_pct > 0 ? "+" : ""}{card.vs_stly_pct.toFixed(1)}%)
-              </span>
-            )}
+        <div className="flex justify-between items-baseline">
+          <span className="text-sm text-surface-600">OTB Occupancy</span>
+          <span className="text-lg font-bold tabular-nums">
+            {(card.otb_occupancy * 100).toFixed(1)}%
           </span>
         </div>
+        <div className="flex justify-between items-baseline">
+          <span className="text-sm text-surface-600">OTB ADR</span>
+          <span className="text-lg font-bold tabular-nums">{formatCurrency(card.otb_adr)}</span>
+        </div>
 
-        {card.budget_remaining !== null && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">Budget Gap</span>
-            <span className={cn("font-medium tabular-nums", varianceColor(-card.budget_remaining))}>
-              {formatVarianceCurrency(-card.budget_remaining)}
-            </span>
+        <div className="border-t border-surface-100 pt-2 mt-2">
+          <div className="flex justify-between items-center">
+            <span className="text-xs text-surface-500">vs STLY OTB</span>
+            <VarianceBadge
+              value={card.vs_stly_revenue}
+              label={stlyLabel}
+              favorable={card.vs_stly_revenue > 0}
+            />
           </div>
-        )}
 
-        {card.pickup_7day !== null && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">7-Day Pickup</span>
-            <span className={cn("font-medium tabular-nums", varianceColor(card.pickup_7day))}>
-              {formatVarianceCurrency(card.pickup_7day)}
-            </span>
-          </div>
-        )}
+          {card.budget_remaining !== null && (
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-xs text-surface-500">Budget Remaining</span>
+              <VarianceBadge
+                value={-card.budget_remaining}
+                label={`${formatVarianceCurrency(-card.budget_remaining)} gap`}
+                favorable={card.budget_remaining <= 0}
+              />
+            </div>
+          )}
+
+          {card.pickup_7day !== null && (
+            <div className="flex justify-between items-center mt-1">
+              <span className="text-xs text-surface-500">Pickup (last 7 days)</span>
+              <VarianceBadge
+                value={card.pickup_7day}
+                label={formatVarianceCurrency(card.pickup_7day)}
+                favorable={card.pickup_7day > 0}
+              />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -97,20 +91,22 @@ function SummaryCard({ card }: { card: OTBSummaryCard }) {
 
 function CardsSkeleton() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="rounded-lg border border-gray-200 bg-white p-4 space-y-3">
-          <Skeleton className="h-4 w-24" />
-          <Skeleton className="h-3 w-32" />
-          <div className="grid grid-cols-3 gap-3">
+        <div key={i} className="bg-white rounded-xl border border-surface-200 p-5 space-y-3">
+          <div className="flex justify-between">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-16" />
+          </div>
+          <div className="space-y-3">
             {Array.from({ length: 3 }).map((_, j) => (
-              <div key={j} className="space-y-1">
-                <Skeleton className="h-2.5 w-12" />
-                <Skeleton className="h-4 w-16" />
+              <div key={j} className="flex justify-between">
+                <Skeleton className="h-4 w-28" />
+                <Skeleton className="h-5 w-20" />
               </div>
             ))}
           </div>
-          <div className="space-y-1.5 pt-2">
+          <div className="border-t border-surface-100 pt-2 space-y-2">
             <Skeleton className="h-3 w-full" />
             <Skeleton className="h-3 w-full" />
           </div>
@@ -125,7 +121,7 @@ export function ForwardLookCards({ propertyId, data, isLoading, error }: Forward
 
   if (error) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
         Failed to load forward look data.
       </div>
     );
@@ -133,14 +129,14 @@ export function ForwardLookCards({ propertyId, data, isLoading, error }: Forward
 
   if (!data || data.summary_cards.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
         No OTB data available.
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
       {data.summary_cards.map((card) => (
         <SummaryCard key={card.window_name} card={card} />
       ))}

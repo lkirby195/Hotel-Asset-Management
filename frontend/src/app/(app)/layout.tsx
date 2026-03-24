@@ -1,5 +1,5 @@
 import { PropertyProvider } from "@/providers/property-provider";
-import { Sidebar } from "@/components/layout/sidebar";
+import { TopNav } from "@/components/layout/top-nav";
 
 export default function AppLayout({
   children,
@@ -8,11 +8,9 @@ export default function AppLayout({
 }) {
   return (
     <PropertyProvider>
-      <div className="flex min-h-screen">
-        <Sidebar />
-        <main className="ml-[220px] min-h-screen flex-1 bg-gray-50 p-5">
-          {children}
-        </main>
+      <div className="min-h-screen bg-surface-50">
+        <TopNav />
+        <main>{children}</main>
       </div>
     </PropertyProvider>
   );

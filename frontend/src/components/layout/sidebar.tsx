@@ -59,10 +59,10 @@ const DEPT_LABELS: Record<string, string> = {
 };
 
 const ROLE_BADGE_COLORS: Record<string, string> = {
-  admin: "bg-green-500/20 text-green-300",
-  executive: "bg-blue-500/20 text-blue-300",
-  operator: "bg-amber-500/20 text-amber-300",
-  manager: "bg-gray-500/20 text-gray-400",
+  admin: "bg-positive-100 text-positive-700",
+  executive: "bg-brand-100 text-brand-700",
+  operator: "bg-yellow-100 text-yellow-700",
+  manager: "bg-surface-100 text-surface-600",
 };
 
 function getInitials(name: string): string {
@@ -134,12 +134,12 @@ export function Sidebar() {
   });
 
   return (
-    <aside className="fixed left-0 top-0 h-screen w-[220px] bg-sidebar-bg flex flex-col shadow-lg z-40">
+    <aside className="fixed left-0 top-0 h-screen w-[220px] bg-surface-900 flex flex-col shadow-lg z-40">
       {/* Logo */}
       <div className="flex h-14 items-center px-5">
-        <span className="text-base font-bold text-gray-50 tracking-tight">
+        <span className="text-base font-bold text-white tracking-tight">
           {PLATFORM_NAME}{" "}
-          <span className="text-sidebar-accent font-normal">{PLATFORM_ACCENT}</span>
+          <span className="text-brand-300 font-normal">{PLATFORM_ACCENT}</span>
         </span>
       </div>
 
@@ -148,11 +148,11 @@ export function Sidebar() {
         {visibleGroups.map((group) => (
           <div key={group.label}>
             <div className="flex items-center gap-2 px-2 mb-1.5">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-sidebar-group">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-surface-400">
                 {group.label}
               </span>
               {group.badge && (
-                <span className="text-[9px] bg-gray-700 text-gray-400 rounded-full px-1.5 py-0.5">
+                <span className="text-[9px] bg-surface-700 text-surface-400 rounded-full px-1.5 py-0.5">
                   {group.badge}
                 </span>
               )}
@@ -163,7 +163,7 @@ export function Sidebar() {
                   return (
                     <div
                       key={item.href}
-                      className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm text-gray-500 opacity-50 cursor-not-allowed pointer-events-none"
+                      className="flex items-center gap-3 rounded-md px-2 py-1.5 text-sm text-surface-500 opacity-50 cursor-not-allowed pointer-events-none"
                     >
                       <item.icon className="h-4 w-4 shrink-0 opacity-70" />
                       {item.label}
@@ -182,8 +182,8 @@ export function Sidebar() {
                     className={cn(
                       "flex items-center gap-3 px-2 py-1.5 text-sm transition-colors",
                       isActive
-                        ? "bg-sidebar-active text-sidebar-accent border-l-2 border-sidebar-accent rounded-none"
-                        : "text-sidebar-text hover:bg-sidebar-hover hover:text-gray-300 rounded-md"
+                        ? "bg-brand-900 text-brand-300 border-l-2 border-brand-300 rounded-none"
+                        : "text-surface-300 hover:bg-surface-800 hover:text-white rounded-md"
                     )}
                   >
                     <item.icon
@@ -202,13 +202,13 @@ export function Sidebar() {
       </nav>
 
       {/* User section at bottom */}
-      <div className="border-t border-gray-800 px-3 py-3">
+      <div className="border-t border-surface-700 px-3 py-3">
         <div className="flex items-center gap-2 px-2">
-          <div className="h-7 w-7 rounded-full bg-sidebar-active flex items-center justify-center">
-            <span className="text-xs font-medium text-sidebar-accent">{userInitials}</span>
+          <div className="h-7 w-7 rounded-full bg-brand-900 flex items-center justify-center">
+            <span className="text-xs font-medium text-brand-300">{userInitials}</span>
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs text-sidebar-text truncate">{userName}</div>
+            <div className="text-xs text-surface-300 truncate">{userName}</div>
             <span
               className={cn(
                 "text-[9px] font-medium rounded-full px-1.5 py-0.5 capitalize",
