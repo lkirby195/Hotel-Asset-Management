@@ -59,7 +59,7 @@ class DashboardService:
         adr = (room_revenue / rooms_sold) if rooms_sold else 0.0
         revpar = (room_revenue / available_rooms) if available_rooms else 0.0
 
-        stly_room_revenue = stly__sum_room_revenue(actuals)
+        stly_room_revenue = _sum_room_revenue(stly_actuals)
         stly_rooms_sold = stly_actuals.get(_ROOMS_SOLD_CODE, 0)
         stly_available = stly_actuals.get(_AVAILABLE_ROOMS_CODE, 0)
         stly_labor = self._sum_labor(stly_actuals)
