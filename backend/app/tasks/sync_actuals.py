@@ -4,6 +4,7 @@ from datetime import date
 from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
+from app.adapters.factory import get_adapter
 from app.config import settings
 from app.models.line_item import LineItem
 from app.models.property import Property
@@ -19,22 +20,7 @@ def _get_sync_engine():
 
 def _get_adapter():
     """Get the data source adapter (ProfitSword or Mock)."""
-    if settings.environment == "development" and not settings.profitsword_username:
-        from app.adapters.mock_adapter import MockAdapter
-        return MockAdapter()
-
-    from app.adapters.mapping import MappingEngine
-    from app.adapters.profitsword import ProfitSwordAdapter
-    mapping = MappingEngine.default()
-    return ProfitSwordAdapter(
-        base_url=settings.profitsword_base_url,
-        username=settings.profitsword_username,
-        password=settings.profitsword_password,
-        mapping=mapping,
-        dataset_actuals=settings.profitsword_dataset_actuals,
-        dataset_budget=settings.profitsword_dataset_budget,
-        dataset_forecast=settings.profitsword_dataset_forecast,
-    )
+    return get_adapter()
 
 
 @celery_app.task(bind=True, max_retries=3, name="sync_actuals")
