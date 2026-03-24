@@ -71,19 +71,23 @@ function KPICardItem({ kpi }: { kpi: YesterdayKPI }) {
 
   return (
     <KpiCard label={kpi.metric_name} value={fmtActual(kpi)} subtitle={budgetLabel}>
-      {kpi.variance_budget !== 0 && (
+      {kpi.variance_budget !== 0 ? (
         <VarianceBadge
           value={kpi.variance_budget}
           label={`${fmtVariance(kpi.variance_budget, kpi.unit)} vs Bgt`}
           favorable={isFavorable(kpi.variance_budget, kpi.metric_name)}
         />
+      ) : (
+        <span className="text-xs text-surface-300">-- vs Bgt</span>
       )}
-      {kpi.variance_stly !== 0 && (
+      {kpi.variance_stly !== 0 ? (
         <VarianceBadge
           value={kpi.variance_stly}
           label={`${fmtVariance(kpi.variance_stly, kpi.unit)} vs STLY`}
           favorable={isFavorable(kpi.variance_stly, kpi.metric_name)}
         />
+      ) : (
+        <span className="text-xs text-surface-300">-- vs STLY</span>
       )}
     </KpiCard>
   );
@@ -91,9 +95,9 @@ function KPICardItem({ kpi }: { kpi: YesterdayKPI }) {
 
 function YesterdayKPIsSkeleton() {
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="bg-white rounded-xl border border-surface-200 p-4 space-y-2">
+        <div key={i} className="bg-white rounded-xl border border-surface-200 p-4 min-h-[140px] space-y-2">
           <Skeleton className="h-3 w-20" />
           <Skeleton className="h-7 w-24" />
           <Skeleton className="h-3 w-28" />
@@ -123,7 +127,7 @@ export function YesterdayKPIs({ propertyId }: YesterdayKPIsProps) {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         Failed to load yesterday&apos;s performance.
       </div>
     );
@@ -131,14 +135,14 @@ export function YesterdayKPIs({ propertyId }: YesterdayKPIsProps) {
 
   if (!data || data.kpis.length === 0) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         No data available for yesterday.
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
       {data.kpis.map((kpi) => (
         <KPICardItem key={kpi.metric_name} kpi={kpi} />
       ))}

@@ -121,7 +121,7 @@ export function MTDPaceTable({ propertyId }: MTDPaceTableProps) {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         Failed to load MTD pace data.
       </div>
     );
@@ -129,7 +129,7 @@ export function MTDPaceTable({ propertyId }: MTDPaceTableProps) {
 
   if (!data || data.rows.length === 0) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         No MTD data available.
       </div>
     );
