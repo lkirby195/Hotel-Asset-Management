@@ -96,7 +96,8 @@ export function Sidebar() {
     {
       label: "Overview",
       items: [
-        { label: "Goals", href: "/dashboard", icon: LayoutGrid },
+        { label: "Dashboard", href: "/dashboard", icon: LayoutGrid },
+        { label: "Goals", href: "/goals", icon: LayoutGrid },
       ],
     },
     {
