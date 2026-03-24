@@ -823,6 +823,26 @@ def seed(db_url: str) -> None:
 
         print(f"    Total: {total_budgets} budget records.")
 
+        # --- Month Close Status ---
+        print("[7/7] Marking Jan & Feb 2026 as closed months...")
+        for prop in PROPERTY_DEFS:
+            for m in (1, 2):
+                close_id = str(uuid.uuid5(TENANT_ID, f"close-{prop['id']}-2026-{m}"))
+                conn.execute(text("""
+                    INSERT INTO month_close_status (id, tenant_id, property_id, year, month, is_closed, closed_at, closed_by)
+                    VALUES (:id, :tid, :pid, :year, :month, true, :closed_at, :closed_by)
+                    ON CONFLICT (tenant_id, property_id, year, month) DO UPDATE SET is_closed = true, closed_at = EXCLUDED.closed_at
+                """), {
+                    "id": close_id,
+                    "tid": str(TENANT_ID),
+                    "pid": str(prop["id"]),
+                    "year": 2026,
+                    "month": m,
+                    "closed_at": datetime(2026, m + 1, 5, 12, 0, 0).isoformat(),
+                    "closed_by": str(ADMIN_USER_ID),
+                })
+        print("    10 month-close records created (5 properties × 2 months).")
+
     engine.dispose()
     print("\nSeed complete!")
 

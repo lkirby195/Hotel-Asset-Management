@@ -89,7 +89,6 @@ export function Sidebar() {
       label: DEPT_LABELS[d.type] ?? d.name,
       href: `/departments/${d.type}`,
       icon: DEPT_ICONS[d.type] ?? MoreHorizontal,
-      disabled: true,
     }));
 
   const navGroups: NavGroup[] = [
@@ -109,7 +108,7 @@ export function Sidebar() {
       ],
     },
     ...(departmentItems.length > 0
-      ? [{ label: "Departments", items: departmentItems, badge: "Soon" } as NavGroup]
+      ? [{ label: "Departments", items: departmentItems } as NavGroup]
       : []),
     {
       label: "Executive",

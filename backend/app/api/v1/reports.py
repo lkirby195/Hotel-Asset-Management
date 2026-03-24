@@ -3,10 +3,13 @@ from datetime import date
 
 import redis.asyncio as redis
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.cache.redis_client import get_redis
 from app.dependencies import get_current_user, get_db_session, require_property_access
+from app.models.month_close import MonthCloseStatus
 from app.models.user import User
 from app.schemas.common import APIResponse, TimePeriod
 from app.schemas.report import InterMonthResponse, ReportLineItem
@@ -80,3 +83,37 @@ async def inter_month_children(
         tenant_id=current_user.tenant_id,
     )
     return APIResponse(data=children)
+
+
+class MonthCloseItem(BaseModel):
+    year: int
+    month: int
+    is_closed: bool
+    closed_at: str | None
+
+
+@router.get(
+    "/month-close/{property_id}",
+    response_model=APIResponse[list[MonthCloseItem]],
+)
+async def month_close_status(
+    property_id: uuid.UUID = Depends(require_property_access),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    result = await db.execute(
+        select(MonthCloseStatus)
+        .where(MonthCloseStatus.property_id == property_id)
+        .order_by(MonthCloseStatus.year, MonthCloseStatus.month)
+    )
+    rows = result.scalars().all()
+    items = [
+        MonthCloseItem(
+            year=r.year,
+            month=r.month,
+            is_closed=r.is_closed,
+            closed_at=r.closed_at.isoformat() if r.closed_at else None,
+        )
+        for r in rows
+    ]
+    return APIResponse(data=items)
