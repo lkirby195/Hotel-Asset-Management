@@ -8,9 +8,10 @@ import {
   formatCurrency,
   formatVarianceCurrency,
   formatPercent,
-  formatVariancePercent,
   formatPercentagePoints,
 } from "@/lib/formatters";
+import { DataTable, TableHeader, Th } from "@/components/ui/data-table";
+import { VarianceBadge } from "@/components/ui/variance-badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { MTDPaceRow, MTDPaceResponse } from "@/types/dashboard";
 import type { ApiResponse } from "@/types/api";
@@ -19,52 +20,66 @@ interface MTDPaceTableProps {
   propertyId: string;
 }
 
-function formatActual(row: MTDPaceRow): string {
+function fmtActual(row: MTDPaceRow): string {
   return row.unit === "currency" ? formatCurrency(row.actual) : formatPercent(row.actual);
 }
 
-function formatComparison(value: number, unit: string): string {
+function fmtComparison(value: number, unit: string): string {
   return unit === "currency" ? formatCurrency(value) : formatPercent(value);
 }
 
-function formatVariance(value: number, unit: string): string {
-  // Percentage metrics use percentage points (pp) for variance, not relative %
+function fmtVariance(value: number, unit: string): string {
   return unit === "currency" ? formatVarianceCurrency(value) : formatPercentagePoints(value);
 }
 
-function varianceColor(value: number, metricName: string): string {
-  if (value === 0) return "text-gray-500";
-  const isExpense = metricName === "Total Labor" || metricName === "Labor % of Revenue";
-  const isFavorable = isExpense ? value < 0 : value > 0;
-  return isFavorable ? "text-favorable" : "text-unfavorable";
+function isExpenseMetric(name: string): boolean {
+  return name === "Total Labor" || name === "Labor % of Revenue";
 }
 
-function VarianceBadge({ value, pct, unit, metricName }: {
+function isFavorable(value: number, metricName: string): boolean {
+  if (value === 0) return true;
+  return isExpenseMetric(metricName) ? value < 0 : value > 0;
+}
+
+function isHighlightRow(name: string): boolean {
+  return name === "Room Revenue" || name === "Total Revenue";
+}
+
+function PaceVarianceBadge({
+  value,
+  pct,
+  unit,
+  metricName,
+}: {
   value: number;
   pct: number | null;
   unit: string;
   metricName: string;
 }) {
-  const color = varianceColor(value, metricName);
+  if (value === 0 && (pct === null || pct === 0)) return <span className="text-xs text-surface-400">&mdash;</span>;
+  const label =
+    pct !== null && unit === "currency"
+      ? `${fmtVariance(value, unit)} (${pct > 0 ? "+" : ""}${pct.toFixed(1)}%)`
+      : fmtVariance(value, unit);
+
   return (
-    <span className={cn("text-xs font-medium whitespace-nowrap", color)}>
-      {formatVariance(value, unit)}
-      {pct !== null && (
-        <span className="ml-0.5 text-[10px]">({pct > 0 ? "+" : ""}{pct.toFixed(1)}%)</span>
-      )}
-    </span>
+    <VarianceBadge
+      value={value}
+      label={label}
+      favorable={isFavorable(value, metricName)}
+    />
   );
 }
 
 function MTDPaceTableSkeleton() {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+    <div className="bg-white rounded-xl border border-surface-200 overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-200 bg-gray-50">
+            <tr className="bg-surface-50 border-b border-surface-200">
               {Array.from({ length: 8 }).map((_, i) => (
-                <th key={i} className="px-3 py-2.5">
+                <th key={i} className="px-4 py-3">
                   <Skeleton className="h-3 w-16" />
                 </th>
               ))}
@@ -72,9 +87,9 @@ function MTDPaceTableSkeleton() {
           </thead>
           <tbody>
             {Array.from({ length: 7 }).map((_, i) => (
-              <tr key={i} className="border-b border-gray-100">
+              <tr key={i} className="border-b border-surface-100">
                 {Array.from({ length: 8 }).map((_, j) => (
-                  <td key={j} className="px-3 py-2.5">
+                  <td key={j} className="px-4 py-3">
                     <Skeleton className="h-3 w-16" />
                   </td>
                 ))}
@@ -106,7 +121,7 @@ export function MTDPaceTable({ propertyId }: MTDPaceTableProps) {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
         Failed to load MTD pace data.
       </div>
     );
@@ -114,72 +129,85 @@ export function MTDPaceTable({ propertyId }: MTDPaceTableProps) {
 
   if (!data || data.rows.length === 0) {
     return (
-      <div className="rounded-lg border border-gray-200 bg-white p-6 text-center text-sm text-gray-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
         No MTD data available.
       </div>
     );
   }
 
   return (
-    <div className="space-y-2">
-      <div className="text-xs text-gray-500">
-        {new Date(data.period_start + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-        {" – "}
-        {new Date(data.period_end + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-        <span className="ml-2 text-gray-400">
-          ({data.days_elapsed} of {data.days_in_month} days)
-        </span>
-      </div>
-      <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 text-xs font-medium text-gray-500 uppercase tracking-wide">
-                <th className="px-3 py-2.5 text-left">Metric</th>
-                <th className="px-3 py-2.5 text-right">Actual</th>
-                <th className="px-3 py-2.5 text-right">Budget</th>
-                <th className="px-3 py-2.5 text-right">STLY</th>
-                <th className="px-3 py-2.5 text-right">Fcst Lock</th>
-                <th className="px-3 py-2.5 text-right">vs Budget</th>
-                <th className="px-3 py-2.5 text-right">vs STLY</th>
-                <th className="px-3 py-2.5 text-right">vs Fcst</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row) => (
-                <tr key={row.metric_name} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50">
-                  <td className="px-3 py-2.5 font-medium text-gray-900 whitespace-nowrap">
-                    {row.metric_name}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums font-semibold text-gray-900">
-                    {formatActual(row)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {formatComparison(row.budget, row.unit)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {formatComparison(row.stly, row.unit)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right tabular-nums text-gray-600">
-                    {formatComparison(row.forecast_lock, row.unit)}
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <VarianceBadge value={row.vs_budget} pct={row.vs_budget_pct} unit={row.unit} metricName={row.metric_name} />
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <VarianceBadge value={row.vs_stly} pct={row.vs_stly_pct} unit={row.unit} metricName={row.metric_name} />
-                  </td>
-                  <td className="px-3 py-2.5 text-right">
-                    <span className={cn("text-xs font-medium whitespace-nowrap", varianceColor(row.vs_forecast, row.metric_name))}>
-                      {formatVariance(row.vs_forecast, row.unit)}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+    <DataTable>
+      <TableHeader>
+        <Th align="left">Metric</Th>
+        <Th>Actual</Th>
+        <Th>Budget</Th>
+        <Th>STLY</Th>
+        <Th>Fcst Lock</Th>
+        <Th>vs Budget</Th>
+        <Th>vs STLY</Th>
+        <Th>vs Fcst</Th>
+      </TableHeader>
+      <tbody className="divide-y divide-surface-100">
+        {data.rows.map((row) => (
+          <tr
+            key={row.metric_name}
+            className={cn(
+              "hover:bg-surface-50",
+              isHighlightRow(row.metric_name) && "bg-surface-50/50",
+            )}
+          >
+            <td
+              className={cn(
+                "py-3 px-4",
+                isHighlightRow(row.metric_name) ? "font-semibold" : "font-medium",
+              )}
+            >
+              {row.metric_name}
+            </td>
+            <td
+              className={cn(
+                "py-3 px-4 text-right tabular-nums",
+                isHighlightRow(row.metric_name) ? "font-bold" : "font-semibold",
+              )}
+            >
+              {fmtActual(row)}
+            </td>
+            <td className="py-3 px-4 text-right tabular-nums text-surface-600">
+              {fmtComparison(row.budget, row.unit)}
+            </td>
+            <td className="py-3 px-4 text-right tabular-nums text-surface-600">
+              {fmtComparison(row.stly, row.unit)}
+            </td>
+            <td className="py-3 px-4 text-right tabular-nums text-surface-600">
+              {fmtComparison(row.forecast_lock, row.unit)}
+            </td>
+            <td className="py-3 px-4 text-right">
+              <PaceVarianceBadge
+                value={row.vs_budget}
+                pct={row.vs_budget_pct}
+                unit={row.unit}
+                metricName={row.metric_name}
+              />
+            </td>
+            <td className="py-3 px-4 text-right">
+              <PaceVarianceBadge
+                value={row.vs_stly}
+                pct={row.vs_stly_pct}
+                unit={row.unit}
+                metricName={row.metric_name}
+              />
+            </td>
+            <td className="py-3 px-4 text-right">
+              <PaceVarianceBadge
+                value={row.vs_forecast}
+                pct={null}
+                unit={row.unit}
+                metricName={row.metric_name}
+              />
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </DataTable>
   );
 }

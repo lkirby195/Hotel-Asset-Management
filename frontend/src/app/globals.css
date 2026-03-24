@@ -10,7 +10,39 @@
   --font-sans: "Inter", system-ui, sans-serif;
   --font-mono: var(--font-geist-mono);
 
-  /* Sidebar */
+  /* ── Brand Blue ─────────────────────────────── */
+  --color-brand-50: #f0f7ff;
+  --color-brand-100: #e0effe;
+  --color-brand-300: #a3d0fb;
+  --color-brand-500: #3b82f6;
+  --color-brand-700: #1d4ed8;
+  --color-brand-900: #1e3a5f;
+
+  /* ── Positive (favorable variance) ──────────── */
+  --color-positive-50: #ecfdf5;
+  --color-positive-100: #d1fae5;
+  --color-positive-500: #10b981;
+  --color-positive-700: #047857;
+
+  /* ── Negative (unfavorable variance) ─────────── */
+  --color-negative-50: #fef2f2;
+  --color-negative-100: #fee2e2;
+  --color-negative-500: #ef4444;
+  --color-negative-700: #b91c1c;
+
+  /* ── Surface (slate scale) ──────────────────── */
+  --color-surface-50: #f8fafc;
+  --color-surface-100: #f1f5f9;
+  --color-surface-200: #e2e8f0;
+  --color-surface-300: #cbd5e1;
+  --color-surface-400: #94a3b8;
+  --color-surface-500: #64748b;
+  --color-surface-600: #475569;
+  --color-surface-700: #334155;
+  --color-surface-800: #1e293b;
+  --color-surface-900: #0f172a;
+
+  /* ── Sidebar (kept for backward compat) ─────── */
   --color-sidebar-bg: #111827;
   --color-sidebar-text: #9CA3AF;
   --color-sidebar-hover: #1F2937;
@@ -18,12 +50,12 @@
   --color-sidebar-accent: #60A5FA;
   --color-sidebar-group: #6B7280;
 
-  /* Brand */
+  /* ── Legacy brand (kept for existing pages) ─── */
   --color-brand: #2563EB;
   --color-brand-dark: #1E40AF;
   --color-brand-light: #DBEAFE;
 
-  /* Semantic */
+  /* ── Semantic (kept for backward compat) ─────── */
   --color-favorable: #22C55E;
   --color-favorable-bg: #DCFCE7;
   --color-favorable-dark: #15803D;
@@ -35,9 +67,6 @@
   --color-warning-dark: #B45309;
   --color-info: #2563EB;
   --color-info-bg: #DBEAFE;
-
-  /* Surface */
-  --color-surface: #F3F4F6;
 
   /* shadcn compat */
   --color-sidebar-ring: var(--sidebar-ring);
@@ -117,7 +146,7 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply bg-surface-50 text-surface-800 antialiased;
   }
   html {
     @apply font-sans;
@@ -128,4 +157,13 @@
   .tabular-nums {
     font-variant-numeric: tabular-nums;
   }
+}
+
+/* KPI card hover lift effect */
+.kpi-card {
+  transition: all 0.2s ease;
+}
+.kpi-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.08);
 }
