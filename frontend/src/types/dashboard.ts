@@ -40,3 +40,43 @@ export interface MTDPaceResponse {
   days_in_month: number;
   rows: MTDPaceRow[];
 }
+
+// ── Forward Look / OTB ─────────────────────────────────────────
+
+export interface OTBSummaryCard {
+  window_name: string;
+  date_start: string;
+  date_end: string;
+  nights: number;
+  otb_revenue: number;   // cents
+  otb_occupancy: number;
+  otb_adr: number;       // cents
+  stly_revenue: number;  // cents
+  vs_stly_revenue: number; // cents
+  vs_stly_pct: number | null;
+  budget_remaining: number | null; // cents
+  pickup_7day: number | null;      // cents
+}
+
+export interface OTBDailyRow {
+  date: string;
+  day_of_week: string;
+  transient_rooms: number;
+  group_rooms: number;
+  total_rooms: number;
+  occupancy: number;
+  adr: number;       // cents
+  revenue: number;   // cents
+  stly_rooms: number;
+  stly_revenue: number; // cents
+  vs_stly_pct: number | null;
+}
+
+export interface ForwardLookResponse {
+  property_id: string;
+  property_name: string;
+  as_of_date: string;
+  available_rooms_per_night: number;
+  summary_cards: OTBSummaryCard[];
+  daily_detail: OTBDailyRow[];
+}

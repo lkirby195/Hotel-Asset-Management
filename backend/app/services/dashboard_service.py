@@ -5,7 +5,16 @@ from datetime import date, timedelta
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.dashboard import MTDPaceResponse, MTDPaceRow, YesterdayKPI, YesterdayResponse
+from app.adapters.base import DataSourceAdapter
+from app.schemas.dashboard import (
+    ForwardLookResponse,
+    MTDPaceResponse,
+    MTDPaceRow,
+    OTBDailyRow,
+    OTBSummaryCard,
+    YesterdayKPI,
+    YesterdayResponse,
+)
 
 
 # Line item codes for the KPIs we need
@@ -342,3 +351,148 @@ class DashboardService:
             {"property_id": property_id, "year": year, "month": month},
         )
         return {row.code: row.value * days_elapsed / days_in_month for row in result.fetchall()}
+
+    # ── Forward Look / OTB ────────────────────────────────────────────
+
+    async def get_forward_look(
+        self,
+        db: AsyncSession,
+        property_id: uuid.UUID,
+        property_name: str,
+        property_code: str,
+        available_rooms: int,
+        adapter: DataSourceAdapter,
+        target_date: date | None = None,
+    ) -> ForwardLookResponse:
+        if target_date is None:
+            target_date = date.today()
+
+        end_30 = target_date + timedelta(days=29)
+
+        # Fetch OTB for next 30 days and STLY equivalent
+        otb_records = await adapter.fetch_otb([property_code], target_date, end_30)
+        stly_start = self._same_day_last_year(target_date)
+        stly_end = self._same_day_last_year(end_30)
+        stly_records = await adapter.fetch_otb([property_code], stly_start, stly_end)
+
+        # TODO: Pickup requires OTB snapshot history — the adapter needs an as_of_date
+        # parameter on fetch_otb to compare today's OTB against the snapshot from 7 days
+        # ago. This is a future feature; until then pickup_7day is None on all cards.
+
+        # Index by date
+        otb_by_date = {r.date: r for r in otb_records if r.property_code == property_code}
+        stly_by_date = {r.date: r for r in stly_records if r.property_code == property_code}
+
+        # Build summary cards
+        year = target_date.year
+        month = target_date.month
+        end_of_month = date(year, month, calendar.monthrange(year, month)[1])
+        windows = [
+            ("Rest of Month", target_date, min(end_of_month, end_30)),
+            ("Next 14 Days", target_date, target_date + timedelta(days=13)),
+            ("Next 30 Days", target_date, end_30),
+        ]
+
+        summary_cards = []
+        for name, w_start, w_end in windows:
+            card = self._build_summary_card(
+                name, w_start, w_end, otb_by_date, stly_by_date, available_rooms,
+            )
+            summary_cards.append(card)
+
+        # Build 7-day daily detail
+        daily_detail = []
+        for i in range(7):
+            d = target_date + timedelta(days=i)
+            stly_d = self._same_day_last_year(d)
+            otb = otb_by_date.get(d)
+            stly = stly_by_date.get(stly_d)
+
+            total_rooms = otb.rooms if otb else 0
+            revenue = otb.revenue if otb else 0
+            adr = otb.adr if otb else 0
+            occ = total_rooms / available_rooms if available_rooms else 0.0
+
+            # Mock approximation: 70% transient / 30% group split.
+            # In production, OTB data from ProfitSword will include actual
+            # segment breakdowns; this fallback is used until that data is available.
+            group_rooms = int(total_rooms * 0.30)
+            transient_rooms = total_rooms - group_rooms
+
+            stly_rooms = stly.rooms if stly else 0
+            stly_revenue = stly.revenue if stly else 0
+            vs_stly_pct = (
+                round((revenue - stly_revenue) / stly_revenue * 100, 1)
+                if stly_revenue else None
+            )
+
+            daily_detail.append(OTBDailyRow(
+                date=d,
+                day_of_week=d.strftime("%a"),
+                transient_rooms=transient_rooms,
+                group_rooms=group_rooms,
+                total_rooms=total_rooms,
+                occupancy=round(occ, 4),
+                adr=adr,
+                revenue=revenue,
+                stly_rooms=stly_rooms,
+                stly_revenue=stly_revenue,
+                vs_stly_pct=vs_stly_pct,
+            ))
+
+        return ForwardLookResponse(
+            property_id=property_id,
+            property_name=property_name,
+            as_of_date=target_date,
+            available_rooms_per_night=available_rooms,
+            summary_cards=summary_cards,
+            daily_detail=daily_detail,
+        )
+
+    def _build_summary_card(
+        self,
+        window_name: str,
+        w_start: date,
+        w_end: date,
+        otb_by_date: dict,
+        stly_by_date: dict,
+        available: int,
+    ) -> OTBSummaryCard:
+        nights = (w_end - w_start).days + 1
+        total_revenue = 0
+        total_rooms = 0
+        stly_revenue = 0
+
+        d = w_start
+        while d <= w_end:
+            otb = otb_by_date.get(d)
+            if otb:
+                total_revenue += otb.revenue
+                total_rooms += otb.rooms
+
+            stly_d = self._same_day_last_year(d)
+            stly = stly_by_date.get(stly_d)
+            if stly:
+                stly_revenue += stly.revenue
+
+            d += timedelta(days=1)
+
+        occ = total_rooms / (available * nights) if (available and nights) else 0.0
+        adr = total_revenue // total_rooms if total_rooms else 0
+        vs_stly = total_revenue - stly_revenue
+        vs_stly_pct = round(vs_stly / stly_revenue * 100, 1) if stly_revenue else None
+
+        return OTBSummaryCard(
+            window_name=window_name,
+            date_start=w_start,
+            date_end=w_end,
+            nights=nights,
+            otb_revenue=total_revenue,
+            otb_occupancy=round(occ, 4),
+            otb_adr=adr,
+            stly_revenue=stly_revenue,
+            vs_stly_revenue=vs_stly,
+            vs_stly_pct=vs_stly_pct,
+            budget_remaining=None,  # Budget integration deferred
+            pickup_7day=None,  # Requires OTB snapshot history (see TODO above)
+        )

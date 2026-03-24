@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -19,6 +19,7 @@ class Property(Base, TenantMixin, TimestampMixin):
     code: Mapped[str] = mapped_column(String(50), nullable=False)
     timezone: Mapped[str] = mapped_column(String(50), server_default="America/New_York")
     is_active: Mapped[bool] = mapped_column(Boolean, server_default="true")
+    available_rooms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     tenant = relationship("Tenant", back_populates="properties")
     departments = relationship("Department", back_populates="property")
