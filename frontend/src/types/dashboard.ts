@@ -80,3 +80,24 @@ export interface ForwardLookResponse {
   summary_cards: OTBSummaryCard[];
   daily_detail: OTBDailyRow[];
 }
+
+// ── Department Snapshot Cards ─────────────────────────────────────
+
+export interface DeptSnapshotCard {
+  dept_name: string;
+  revenue: number;       // cents
+  budget: number;        // cents
+  variance_pct: number | null;
+  kpi1_label: string;
+  kpi1_value: string;    // pre-formatted
+  kpi2_label: string;
+  kpi2_value: string;    // pre-formatted
+  has_data: boolean;
+}
+
+export interface DeptSnapshotResponse {
+  property_id: string;
+  property_name: string;
+  period: string;
+  cards: DeptSnapshotCard[];
+}

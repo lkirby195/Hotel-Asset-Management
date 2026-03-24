@@ -12,6 +12,7 @@ import { YesterdayKPIs } from "@/components/dashboard/YesterdayKPIs";
 import { MTDPaceTable } from "@/components/dashboard/MTDPaceTable";
 import { ForwardLookCards } from "@/components/dashboard/ForwardLookCards";
 import { OTBDailyTable } from "@/components/dashboard/OTBDailyTable";
+import { DeptSnapshotGrid } from "@/components/dashboard/DeptSnapshotGrid";
 import { useGoals } from "@/hooks/useGoals";
 import { useProperty } from "@/providers/property-provider";
 import { GaugeSkeleton } from "@/components/shared/LoadingSkeleton";
@@ -91,6 +92,11 @@ export default function DashboardPage() {
           />
           <OTBDailyTable data={forwardLookData} isLoading={forwardLookLoading} />
         </div>
+      </section>
+
+      <section>
+        <h2 className="text-sm font-medium text-gray-700 mb-3">Department Snapshot &mdash; MTD</h2>
+        <DeptSnapshotGrid propertyId={selectedPropertyId} />
       </section>
 
       <section>

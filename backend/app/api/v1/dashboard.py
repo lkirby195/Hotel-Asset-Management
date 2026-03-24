@@ -8,7 +8,7 @@ from app.dependencies import get_current_user, get_db_session, require_property_
 from app.models.user import User
 from app.adapters.factory import get_adapter
 from app.schemas.common import APIResponse
-from app.schemas.dashboard import ForwardLookResponse, MTDPaceResponse, YesterdayResponse
+from app.schemas.dashboard import DeptSnapshotResponse, ForwardLookResponse, MTDPaceResponse, YesterdayResponse
 from app.services.dashboard_service import DashboardService
 from app.services.property_service import PropertyService
 
@@ -87,6 +87,31 @@ async def forward_look(
         property_code=prop.code,
         available_rooms=prop.available_rooms,
         adapter=adapter,
+        target_date=target_date,
+    )
+    return APIResponse(data=result)
+
+
+@router.get(
+    "/dept-snapshots/{property_id}",
+    response_model=APIResponse[DeptSnapshotResponse],
+)
+async def dept_snapshots(
+    property_id: uuid.UUID = Depends(require_property_access),
+    period: str = Query(default="mtd"),
+    target_date: date | None = Query(default=None, alias="date"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    prop = await property_service.get_property(db, property_id)
+    if not prop:
+        raise HTTPException(status_code=404, detail="Property not found")
+
+    result = await dashboard_service.get_dept_snapshots(
+        db=db,
+        property_id=property_id,
+        property_name=prop.name,
+        period=period,
         target_date=target_date,
     )
     return APIResponse(data=result)
