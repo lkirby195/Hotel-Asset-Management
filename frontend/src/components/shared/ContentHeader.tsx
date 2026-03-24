@@ -1,12 +1,10 @@
 "use client";
 
-import { PropertySelector } from "@/components/layout/property-selector";
 import type { ReactNode } from "react";
 
 interface ContentHeaderProps {
   title: string;
   subtitle?: string;
-  showPropertySelector?: boolean;
   children?: ReactNode;
   lastSynced?: string;
 }
@@ -14,7 +12,6 @@ interface ContentHeaderProps {
 export function ContentHeader({
   title,
   subtitle,
-  showPropertySelector = true,
   children,
   lastSynced,
 }: ContentHeaderProps) {
@@ -27,7 +24,6 @@ export function ContentHeader({
             <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
           )}
         </div>
-        {showPropertySelector && <PropertySelector />}
       </div>
       {children && (
         <div className="flex items-center gap-4 bg-white border border-gray-200 rounded-lg px-3 py-2">

@@ -55,6 +55,22 @@
   --color-brand-dark: #1E40AF;
   --color-brand-light: #DBEAFE;
 
+  /* ── Warning ───────────────────────────────────── */
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-700: #b45309;
+
+  /* ── Flow (favorable flow-through, green) ─────── */
+  --color-flow-50: #f0fdf4;
+  --color-flow-100: #dcfce7;
+  --color-flow-700: #15803d;
+
+  /* ── Flex (unfavorable flex, orange) ──────────── */
+  --color-flex-50: #fff7ed;
+  --color-flex-100: #ffedd5;
+  --color-flex-700: #c2410c;
+
   /* ── Semantic (kept for backward compat) ─────── */
   --color-favorable: #22C55E;
   --color-favorable-bg: #DCFCE7;
