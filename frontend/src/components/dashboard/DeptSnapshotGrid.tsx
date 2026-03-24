@@ -79,7 +79,7 @@ function SnapshotCard({ card, onClick }: { card: DeptSnapshotCard; onClick: () =
 
 function DeptSnapshotSkeleton() {
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
       {Array.from({ length: 6 }).map((_, i) => (
         <div key={i} className="bg-white rounded-xl border border-surface-200 p-4 space-y-2">
           <div className="flex justify-between">
@@ -118,7 +118,7 @@ export function DeptSnapshotGrid({ propertyId }: DeptSnapshotGridProps) {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         Failed to load department snapshots.
       </div>
     );
@@ -128,14 +128,14 @@ export function DeptSnapshotGrid({ propertyId }: DeptSnapshotGridProps) {
 
   if (visibleCards.length === 0) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         No department data available for this period.
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
       {visibleCards.map((card) => (
         <SnapshotCard
           key={card.dept_name}

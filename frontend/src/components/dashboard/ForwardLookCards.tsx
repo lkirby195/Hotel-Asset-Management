@@ -91,7 +91,7 @@ function SummaryCard({ card }: { card: OTBSummaryCard }) {
 
 function CardsSkeleton() {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       {Array.from({ length: 3 }).map((_, i) => (
         <div key={i} className="bg-white rounded-xl border border-surface-200 p-5 space-y-3">
           <div className="flex justify-between">
@@ -121,7 +121,7 @@ export function ForwardLookCards({ propertyId, data, isLoading, error }: Forward
 
   if (error) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         Failed to load forward look data.
       </div>
     );
@@ -129,14 +129,14 @@ export function ForwardLookCards({ propertyId, data, isLoading, error }: Forward
 
   if (!data || data.summary_cards.length === 0) {
     return (
-      <div className="rounded-xl border border-surface-200 bg-white p-6 text-center text-sm text-surface-500">
+      <div className="rounded-xl border border-surface-200 bg-white p-6 min-h-[140px] flex items-center justify-center text-sm text-surface-500">
         No OTB data available.
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       {data.summary_cards.map((card) => (
         <SummaryCard key={card.window_name} card={card} />
       ))}

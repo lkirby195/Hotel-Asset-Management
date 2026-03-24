@@ -22,7 +22,7 @@ function SectionHeader({
   subtitle?: string;
 }) {
   return (
-    <div className="flex items-center gap-2 mb-4">
+    <div className="flex items-center gap-2 mb-4 mt-2">
       <h3 className="text-sm font-semibold text-surface-500 uppercase tracking-wider">
         {title}
       </h3>
@@ -84,9 +84,9 @@ export default function DashboardPage() {
     : undefined;
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-6">
+    <div className="max-w-7xl mx-auto px-6 py-6 space-y-8">
       {/* Page Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-surface-900">
             {greeting}, {firstName}
@@ -95,7 +95,7 @@ export default function DashboardPage() {
             {selectedProperty?.name ?? "Property"} &mdash; {dateString}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 self-center">
           <button className="flex items-center gap-1.5 px-3 py-1.5 text-sm border border-surface-200 rounded-lg hover:bg-surface-50 transition-colors">
             <Download className="w-4 h-4" />
             Export
@@ -103,20 +103,20 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Section 1: Yesterday's Performance */}
-      <div className="mb-8">
-        <SectionHeader title="Yesterday's Performance" />
+      {/* Section 1: Prior Day Summary */}
+      <div>
+        <SectionHeader title="Prior Day Summary" />
         <YesterdayKPIs propertyId={selectedPropertyId} />
       </div>
 
       {/* Section 2: Month-to-Date Pace */}
-      <div className="mb-8">
+      <div>
         <SectionHeader title="Month-to-Date Pace" />
         <MTDPaceTable propertyId={selectedPropertyId} />
       </div>
 
       {/* Section 3: Forward Look — On the Books */}
-      <div className="mb-8">
+      <div>
         <SectionHeader
           title="Forward Look &mdash; On the Books"
           subtitle={asOfSubtitle}
@@ -133,7 +133,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Section 4: Department Snapshot — MTD */}
-      <div className="mb-8">
+      <div>
         <SectionHeader title="Department Snapshot &mdash; MTD" />
         <DeptSnapshotGrid propertyId={selectedPropertyId} />
       </div>
