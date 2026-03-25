@@ -1,9 +1,12 @@
 import calendar
+import logging
 import uuid
 from datetime import date, timedelta
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.adapters.base import DataSourceAdapter
 from app.schemas.dashboard import (
@@ -527,6 +530,22 @@ class DashboardService:
     ]
 
     async def get_dept_snapshots(
+        self,
+        db: AsyncSession,
+        property_id: uuid.UUID,
+        property_name: str,
+        period: str = "mtd",
+        target_date: date | None = None,
+    ) -> DeptSnapshotResponse:
+        try:
+            return await self._get_dept_snapshots_inner(
+                db, property_id, property_name, period, target_date
+            )
+        except Exception:
+            logger.exception("get_dept_snapshots failed for %s", property_id)
+            raise
+
+    async def _get_dept_snapshots_inner(
         self,
         db: AsyncSession,
         property_id: uuid.UUID,
