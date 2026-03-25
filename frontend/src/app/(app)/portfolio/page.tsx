@@ -18,7 +18,7 @@ const COLLECTIONS = [
 
 export default function PortfolioPage() {
   const [period, setPeriod] = useState<PeriodType>("mtd");
-  const [collection, setCollection] = useState(COLLECTIONS[0]);
+  const [collection, setCollection] = useState<string>(COLLECTIONS[0]);
   const { properties } = useProperty();
 
   const periodLabel = period === "mtd" ? "MTD" : period === "qtd" ? "QTD" : period === "ytd" ? "YTD" : period.toUpperCase();
