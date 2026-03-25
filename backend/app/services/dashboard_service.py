@@ -315,7 +315,7 @@ class DashboardService:
             """),
             {"property_id": property_id, "start_date": start_date, "end_date": end_date},
         )
-        return {row.code: row.value for row in result.fetchall()}
+        return {row.code: float(row.value) for row in result.fetchall()}
 
     async def _fetch_prorated_budget_range(
         self,
@@ -338,7 +338,7 @@ class DashboardService:
             """),
             {"property_id": property_id, "year": year, "month": month},
         )
-        return {row.code: row.value * days_elapsed / days_in_month for row in result.fetchall()}
+        return {row.code: float(row.value) * days_elapsed / days_in_month for row in result.fetchall()}
 
     async def _fetch_prorated_forecast_range(
         self,
@@ -361,7 +361,7 @@ class DashboardService:
             """),
             {"property_id": property_id, "year": year, "month": month},
         )
-        return {row.code: row.value * days_elapsed / days_in_month for row in result.fetchall()}
+        return {row.code: float(row.value) * days_elapsed / days_in_month for row in result.fetchall()}
 
     # ── Forward Look / OTB ────────────────────────────────────────────
 
