@@ -335,7 +335,7 @@ export default function PLPage() {
 
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState(2);
-  const [view, setView] = useState<"summary" | "detail">("detail");
+  const view = "detail" as const; // Summary view removed — detail shows everything
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [childrenMap, setChildrenMap] = useState<Map<string, PLLineItem[]>>(new Map());
   const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set());
@@ -519,22 +519,7 @@ export default function PLPage() {
             <h2 className="text-xl font-bold text-surface-900">
               Profit &amp; Loss Statement
             </h2>
-            <div className="flex items-center bg-surface-100 rounded-lg p-0.5 text-xs font-medium">
-              {(["summary", "detail"] as const).map((v) => (
-                <button
-                  key={v}
-                  onClick={() => setView(v)}
-                  className={cn(
-                    "px-2.5 py-1 rounded-md capitalize transition-colors",
-                    view === v
-                      ? "bg-white shadow-sm text-brand-700"
-                      : "text-surface-500",
-                  )}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
+
           </div>
           <p className="text-sm text-surface-500 mt-0.5">
             {property?.name ?? "Property"} — {monthName(month)} {year} |{" "}
