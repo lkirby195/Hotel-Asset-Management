@@ -120,6 +120,9 @@ class ReportService:
         py_data = await self._rollup_to_summaries(db, leaf_py)
         fl_data = await self._rollup_to_summaries(db, leaf_fl)
 
+        # Compute calculated rows (GOP, NOI) that aren't covered by rollup
+        await self._compute_calculated_rows(db, actuals, budget_data, py_data, fl_data)
+
         # Fetch top-level (summary) line items
         line_items = await self._fetch_line_items(db, parent_id=None, summary_only=True)
 
@@ -221,6 +224,9 @@ class ReportService:
         budget_data = await self._rollup_to_summaries(db, leaf_budgets)
         py_data = await self._rollup_to_summaries(db, leaf_py)
         fl_data = await self._rollup_to_summaries(db, leaf_fl)
+
+        # Compute calculated rows (GOP, NOI) that aren't covered by rollup
+        await self._compute_calculated_rows(db, actuals, budget_data, py_data, fl_data)
 
         child_items = await self._fetch_line_items(db, parent_id=parent_id, summary_only=False)
         lines = self._build_lines(child_items, actuals, budget_data, py_data, fl_data, depth=1)
@@ -518,6 +524,54 @@ class ReportService:
                 current = parent_of.get(current)
 
         return rolled
+
+    async def _compute_calculated_rows(
+        self,
+        db: AsyncSession,
+        actuals: dict[uuid.UUID, int],
+        budgets: dict[uuid.UUID, int],
+        prior_year: dict[uuid.UUID, int],
+        forecast_lock: dict[uuid.UUID, int],
+    ) -> None:
+        """Compute GOP and NOI calculated rows and update dicts in-place.
+
+        GOP = total_revenue - total_dept_expenses - total_undist_expenses
+        NOI = GOP - total_fixed_charges
+        """
+        calc_codes = [
+            "total_revenue",
+            "total_dept_expenses",
+            "total_undist_expenses",
+            "total_gop",
+            "total_fixed_charges",
+            "noi",
+            "net_operating_income",
+        ]
+        result = await db.execute(
+            select(LineItem.id, LineItem.code).where(LineItem.code.in_(calc_codes))
+        )
+        code_to_id: dict[str, uuid.UUID] = {row.code: row.id for row in result.fetchall()}
+
+        rev_id = code_to_id.get("total_revenue")
+        dept_id = code_to_id.get("total_dept_expenses")
+        undist_id = code_to_id.get("total_undist_expenses")
+        gop_id = code_to_id.get("total_gop")
+        fixed_id = code_to_id.get("total_fixed_charges")
+        noi_id = code_to_id.get("noi") or code_to_id.get("net_operating_income")
+
+        if not (rev_id and dept_id and undist_id and gop_id):
+            return
+
+        for d in (actuals, budgets, prior_year, forecast_lock):
+            rev = d.get(rev_id, 0)
+            dept = d.get(dept_id, 0)
+            undist = d.get(undist_id, 0)
+            gop = rev - dept - undist
+            d[gop_id] = gop
+
+            if noi_id and fixed_id is not None:
+                fixed = d.get(fixed_id, 0)
+                d[noi_id] = gop - fixed
 
     async def _fetch_line_items(
         self,
