@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import {
@@ -9,6 +9,7 @@ import {
   Download,
   FileText,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { createApiClient } from "@/lib/api-client";
 import { useProperty } from "@/providers/property-provider";
@@ -324,6 +325,8 @@ export default function PLPage() {
   const [month, setMonth] = useState(2);
   const [view, setView] = useState<"summary" | "detail">("detail");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [childrenMap, setChildrenMap] = useState<Map<string, PLLineItem[]>>(new Map());
+  const [loadingChildren, setLoadingChildren] = useState<Set<string>>(new Set());
 
   const property = properties.find((p) => p.id === selectedPropertyId);
   const start = `${year}-${pad2(month)}-01`;
@@ -353,10 +356,34 @@ export default function PLPage() {
   });
 
   // ── Derived ──────────────────────────────────────
-  const lines = report?.lines ?? [];
+  const baseLines = report?.lines ?? [];
+
+  // Merge base lines with loaded children, inserting children right after their parent
+  const lines = useMemo(() => {
+    if (childrenMap.size === 0) return baseLines;
+    const result: PLLineItem[] = [];
+    const insertedParents = new Set<string>();
+    for (const line of baseLines) {
+      result.push(line);
+      // Recursively insert children (and their children) after each parent
+      const insertChildren = (parentId: string) => {
+        if (insertedParents.has(parentId)) return;
+        insertedParents.add(parentId);
+        const kids = childrenMap.get(parentId);
+        if (!kids) return;
+        for (const kid of kids) {
+          result.push(kid);
+          insertChildren(kid.id);
+        }
+      };
+      insertChildren(line.id);
+    }
+    return result;
+  }, [baseLines, childrenMap]);
+
   const vis = useMemo(() => visibleSet(lines, expanded), [lines, expanded]);
-  const kpis = useMemo(() => extractKPIs(lines), [lines]);
-  const ff = useMemo(() => calcFlowFlex(lines), [lines]);
+  const kpis = useMemo(() => extractKPIs(baseLines), [baseLines]);
+  const ff = useMemo(() => calcFlowFlex(baseLines), [baseLines]);
 
   const isClosed =
     closes?.find((c) => c.year === year && c.month === month)?.is_closed ??
@@ -370,17 +397,58 @@ export default function PLPage() {
   const prev = () => {
     setMonth((m) => (m === 1 ? (setYear((y) => y - 1), 12) : m - 1));
     setExpanded(new Set());
+    setChildrenMap(new Map());
+    setLoadingChildren(new Set());
   };
   const next = () => {
     setMonth((m) => (m === 12 ? (setYear((y) => y + 1), 1) : m + 1));
     setExpanded(new Set());
+    setChildrenMap(new Map());
+    setLoadingChildren(new Set());
   };
-  const toggle = (id: string) =>
-    setExpanded((s) => {
-      const n = new Set(s);
-      n.has(id) ? n.delete(id) : n.add(id);
-      return n;
-    });
+  const toggle = useCallback(
+    async (id: string) => {
+      // Collapsing — just toggle
+      if (expanded.has(id)) {
+        setExpanded((s) => {
+          const n = new Set(s);
+          n.delete(id);
+          return n;
+        });
+        return;
+      }
+
+      // Expanding — fetch children if not already loaded
+      if (!childrenMap.has(id)) {
+        setLoadingChildren((s) => new Set(s).add(id));
+        try {
+          const r = await api.get<ApiResponse<PLLineItem[]>>(
+            `/reports/inter-month/${selectedPropertyId}/children?parent_id=${id}&period=custom&start=${start}&end=${end}`,
+          );
+          setChildrenMap((m) => {
+            const next = new Map(m);
+            next.set(id, r.data.data);
+            return next;
+          });
+        } catch {
+          // If fetch fails, still allow expand (will just show no children)
+        } finally {
+          setLoadingChildren((s) => {
+            const n = new Set(s);
+            n.delete(id);
+            return n;
+          });
+        }
+      }
+
+      setExpanded((s) => {
+        const n = new Set(s);
+        n.add(id);
+        return n;
+      });
+    },
+    [expanded, childrenMap, api, selectedPropertyId, start, end],
+  );
 
   // ── Guard ────────────────────────────────────────
   if (!selectedPropertyId) {
@@ -557,6 +625,7 @@ export default function PLPage() {
                     totalRev={totalRev}
                     isExpanded={expanded.has(l.id)}
                     canExpand={l.is_summary && view === "detail"}
+                    isLoadingChildren={loadingChildren.has(l.id)}
                     onToggle={() => toggle(l.id)}
                   />
                 ))}
@@ -628,12 +697,14 @@ function PLRow({
   totalRev,
   isExpanded,
   canExpand,
+  isLoadingChildren,
   onToggle,
 }: {
   item: PLLineItem;
   totalRev: number;
   isExpanded: boolean;
   canExpand: boolean;
+  isLoadingChildren: boolean;
   onToggle: () => void;
 }) {
   const s = classify(item);
@@ -671,14 +742,18 @@ function PLRow({
       {/* Line Item */}
       <td className="py-2 px-4" style={{ paddingLeft: indent }}>
         {canExpand && (
-          <span
-            className={cn(
-              "inline-block mr-1.5 text-[10px] transition-transform duration-150",
-              isExpanded && "rotate-90",
-            )}
-          >
-            &#9654;
-          </span>
+          isLoadingChildren ? (
+            <Loader2 className="inline-block mr-1.5 w-3 h-3 animate-spin" />
+          ) : (
+            <span
+              className={cn(
+                "inline-block mr-1.5 text-[10px] transition-transform duration-150",
+                isExpanded && "rotate-90",
+              )}
+            >
+              &#9654;
+            </span>
+          )
         )}
         {item.name}
       </td>
