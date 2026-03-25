@@ -423,7 +423,7 @@ export default function PLPage() {
         setLoadingChildren((s) => new Set(s).add(id));
         try {
           const r = await api.get<ApiResponse<PLLineItem[]>>(
-            `/reports/inter-month/${selectedPropertyId}/children?parent_id=${id}&period=custom&start=${start}&end=${end}`,
+            `/reports/inter-month/${selectedPropertyId}/children/${id}?period=custom&start=${start}&end=${end}`,
           );
           setChildrenMap((m) => {
             const next = new Map(m);
