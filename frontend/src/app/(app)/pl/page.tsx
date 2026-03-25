@@ -717,7 +717,7 @@ function PLRow({
     item.forecast_lock != null ? item.actual - item.forecast_lock : null;
 
   // L0 rows show no numbers (just the header bar)
-  const showNums = s !== "l0";
+  const showNums = true; // All rows show numbers, including L0 headers
 
   // Total rows use light colored text for favorable
   const isTotalRow = s === "total";
