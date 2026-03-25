@@ -107,11 +107,16 @@ async def dept_snapshots(
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    result = await dashboard_service.get_dept_snapshots(
-        db=db,
-        property_id=property_id,
-        property_name=prop.name,
-        period=period,
-        target_date=target_date,
-    )
-    return APIResponse(data=result)
+    import logging, traceback
+    try:
+        result = await dashboard_service.get_dept_snapshots(
+            db=db,
+            property_id=property_id,
+            property_name=prop.name,
+            period=period,
+            target_date=target_date,
+        )
+        return APIResponse(data=result)
+    except Exception as e:
+        logging.getLogger(__name__).error("dept_snapshots error: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
