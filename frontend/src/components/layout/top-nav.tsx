@@ -12,9 +12,10 @@ const DEV_AUTH_BYPASS = process.env.NEXT_PUBLIC_DEV_AUTH_BYPASS === "true";
 
 const NAV_ITEMS = [
   { label: "Dashboard", href: "/dashboard" },
+  { label: "Daily Report", href: "/daily-report" },
   { label: "P&L", href: "/pl" },
+  { label: "Portfolio", href: "/portfolio" },
   { label: "Departments", href: "/departments" },
-  { label: "Pace", href: "/sales-performance" },
   { label: "Goals", href: "/goals" },
 ];
 
