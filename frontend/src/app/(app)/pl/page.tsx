@@ -709,7 +709,10 @@ function PLRow({
 }) {
   const s = classify(item);
   const isEbitda = item.name.toLowerCase().includes("ebitda");
-  const indent = item.depth * 24 + 16;
+  const lc = item.code?.toLowerCase() ?? "";
+  const isWaterfall = ["total_gop", "gop", "gross_operating_profit", "noi", "net_operating_income"].includes(lc);
+  const isGopChild = ["total_undist_expenses", "total_fixed_charges"].includes(lc);
+  const indent = isGopChild ? 48 : item.depth * 24 + 16;
   const fcstVar =
     item.forecast_lock != null ? item.actual - item.forecast_lock : null;
 
@@ -718,10 +721,11 @@ function PLRow({
 
   // Total rows use light colored text for favorable
   const isTotalRow = s === "total";
+  const showTotalStyle = isTotalRow || isWaterfall;
   const totalVarStyle = (v: number) =>
-    isTotalRow ? { color: v >= 0 ? "#a7f3d0" : "#fca5a5" } : undefined;
+    showTotalStyle ? { color: v >= 0 ? "#a7f3d0" : "#fca5a5" } : undefined;
   const totalBadgeStyle = (v: number) =>
-    isTotalRow
+    showTotalStyle
       ? { color: v >= 0 ? "#a7f3d0" : "#fca5a5", background: "rgba(255,255,255,0.1)" }
       : undefined;
 
@@ -733,14 +737,21 @@ function PLRow({
         s === "l1" &&
           "bg-surface-100 font-semibold cursor-pointer hover:bg-surface-200",
         s === "l2" && "hover:bg-surface-50",
-        s === "total" && !isEbitda && "bg-surface-900 text-white font-bold",
+        s === "total" && !isEbitda && !isWaterfall && "bg-surface-900 text-white font-bold",
         s === "subtotal" && "bg-surface-200 font-bold",
+        isGopChild && "bg-surface-100 font-semibold cursor-pointer hover:bg-surface-200",
       )}
-      style={isEbitda && s === "total" ? { background: "#0c4a6e", color: "#fff", fontWeight: 700 } : undefined}
+      style={
+        isWaterfall
+          ? { background: "#1e3a5f", color: "#fff", fontWeight: 700 }
+          : isEbitda && s === "total"
+            ? { background: "#0c4a6e", color: "#fff", fontWeight: 700 }
+            : undefined
+      }
       onClick={canExpand ? onToggle : undefined}
     >
       {/* Line Item */}
-      <td className="py-2 px-4" style={{ paddingLeft: indent }}>
+      <td className="py-2 px-4 min-w-[220px] whitespace-normal" style={{ paddingLeft: indent }}>
         {canExpand && (
           isLoadingChildren ? (
             <Loader2 className="inline-block mr-1.5 w-3 h-3 animate-spin" />
@@ -759,7 +770,7 @@ function PLRow({
       </td>
 
       {/* Actual */}
-      <td className={cn("py-2 px-4 text-right", isTotalRow && "text-sm")}>
+      <td className={cn("py-2 px-4 text-right", (isTotalRow || isWaterfall) && "text-sm")}>
         {showNums ? fmtDollars(item.actual) : ""}
       </td>
 
@@ -768,7 +779,7 @@ function PLRow({
         className={cn(
           "py-2 px-4 text-right",
           s === "l2" && "text-surface-500",
-          isTotalRow && "text-sm",
+          (isTotalRow || isWaterfall) && "text-sm",
         )}
       >
         {showNums ? fmtDollars(item.budget) : ""}
@@ -779,7 +790,7 @@ function PLRow({
         className={cn(
           "py-2 px-4 text-right",
           s === "l2" && "text-surface-500",
-          isTotalRow && "text-sm",
+          (isTotalRow || isWaterfall) && "text-sm",
         )}
       >
         {showNums
@@ -794,7 +805,7 @@ function PLRow({
         className={cn(
           "py-2 px-4 text-right border-r-2 border-surface-300",
           s === "l2" && "text-surface-500",
-          isTotalRow && "text-sm",
+          (isTotalRow || isWaterfall) && "text-sm",
         )}
       >
         {showNums
@@ -817,10 +828,10 @@ function PLRow({
       <td
         className={cn(
           "py-2 px-4 text-right border-l-2 border-brand-500",
-          !isTotalRow && varColor(item.variance_dollars, item.data_type),
-          isTotalRow && "text-sm",
+          !(isTotalRow || isWaterfall) && varColor(item.variance_dollars, item.data_type),
+          (isTotalRow || isWaterfall) && "text-sm",
         )}
-        style={isTotalRow ? totalVarStyle(item.variance_dollars) : undefined}
+        style={(isTotalRow || isWaterfall) ? totalVarStyle(item.variance_dollars) : undefined}
       >
         {showNums ? fmtVarDollars(item.variance_dollars) : ""}
       </td>
@@ -831,9 +842,9 @@ function PLRow({
           <span
             className={cn(
               "inline-flex px-1 py-0.5 rounded text-[10px] font-medium",
-              !isTotalRow && badgeCls(item.variance_dollars, item.data_type),
+              !(isTotalRow || isWaterfall) && badgeCls(item.variance_dollars, item.data_type),
             )}
-            style={isTotalRow ? totalBadgeStyle(item.variance_dollars) : undefined}
+            style={(isTotalRow || isWaterfall) ? totalBadgeStyle(item.variance_dollars) : undefined}
           >
             {fmtPct(item.variance_pct)}
           </span>
@@ -846,13 +857,13 @@ function PLRow({
       <td
         className={cn(
           "py-2 px-4 text-right",
-          !isTotalRow &&
+          !(isTotalRow || isWaterfall) &&
             (fcstVar != null
               ? varColor(fcstVar, item.data_type)
               : "text-surface-400"),
-          isTotalRow && "text-sm",
+          (isTotalRow || isWaterfall) && "text-sm",
         )}
-        style={isTotalRow && fcstVar != null ? totalVarStyle(fcstVar) : undefined}
+        style={(isTotalRow || isWaterfall) && fcstVar != null ? totalVarStyle(fcstVar) : undefined}
       >
         {showNums ? (fcstVar != null ? fmtVarDollars(fcstVar) : "—") : ""}
       </td>
@@ -861,11 +872,11 @@ function PLRow({
       <td
         className={cn(
           "py-2 px-4 text-right",
-          !isTotalRow && varColor(item.py_variance_dollars ?? 0, item.data_type),
-          isTotalRow && "text-sm",
+          !(isTotalRow || isWaterfall) && varColor(item.py_variance_dollars ?? 0, item.data_type),
+          (isTotalRow || isWaterfall) && "text-sm",
         )}
         style={
-          isTotalRow
+          (isTotalRow || isWaterfall)
             ? totalVarStyle(item.py_variance_dollars ?? 0)
             : undefined
         }
@@ -883,11 +894,11 @@ function PLRow({
           <span
             className={cn(
               "inline-flex px-1 py-0.5 rounded text-[10px] font-medium",
-              !isTotalRow &&
+              !(isTotalRow || isWaterfall) &&
                 badgeCls(item.py_variance_dollars ?? 0, item.data_type),
             )}
             style={
-              isTotalRow
+              (isTotalRow || isWaterfall)
                 ? totalBadgeStyle(item.py_variance_dollars ?? 0)
                 : undefined
             }
