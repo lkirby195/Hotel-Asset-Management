@@ -617,15 +617,7 @@ export default function PLPage() {
 
             <tbody>
               {lines
-                .filter((l) => {
-                  if (view === "summary") {
-                    const s = classify(l);
-                    return (
-                      s === "l0" || s === "total" || s === "subtotal"
-                    );
-                  }
-                  return vis.has(l.id);
-                })
+                .filter((l) => vis.has(l.id))
                 .map((l) => (
                   <PLRow
                     key={l.id}
