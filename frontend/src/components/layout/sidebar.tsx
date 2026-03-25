@@ -17,6 +17,7 @@ import {
   UserCog,
   RefreshCw,
   BarChart3,
+  CalendarDays,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useProperty } from "@/providers/property-provider";
@@ -102,6 +103,7 @@ export function Sidebar() {
     {
       label: "Reports",
       items: [
+        { label: "Daily Report", href: "/daily-report", icon: CalendarDays },
         { label: "Performance", href: "/performance", icon: TrendingUp },
         { label: "P&L", href: "/pl", icon: FileText },
         { label: "Sales Performance", href: "/sales-performance", icon: BarChart3 },

@@ -651,7 +651,7 @@ export default function PLPage() {
           <h3 className="text-sm font-semibold text-surface-700">
             Commentary — {monthName(month)} {year}
           </h3>
-          <button className="text-xs text-brand-600 font-medium hover:text-brand-800">
+          <button className="flex items-center gap-1 text-xs text-brand-600 font-medium hover:text-brand-800 px-3 py-1.5 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
             + Add Comment
           </button>
         </div>
@@ -682,6 +682,15 @@ export default function PLPage() {
             author="Jason M."
             date={`${monthShort(month)} ${days}`}
             text="Exceptional snow conditions drove strong YoY increase in mountain ops revenue. Extended season operations approved through April 6 based on snowpack levels."
+          />
+          <Comment
+            tags={[
+              { label: "Property Issue", cls: "bg-orange-100 text-orange-800" },
+              { label: "Spa", cls: "bg-pink-100 text-pink-800" },
+            ]}
+            author="Sarah K."
+            date={`${monthShort(month)} 15`}
+            text="Spa HVAC unit failure resulted in 4-day closure of treatment rooms. Insurance claim filed. Estimated revenue impact ($18K). Temporary units installed, full repair scheduled for early next month."
           />
         </div>
       </div>
