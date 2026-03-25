@@ -624,7 +624,7 @@ export default function PLPage() {
                     item={l}
                     totalRev={totalRev}
                     isExpanded={expanded.has(l.id)}
-                    canExpand={l.is_summary && view === "detail"}
+                    canExpand={l.is_summary && view === "detail" && !["total_gop", "gop", "gross_operating_profit", "noi", "net_operating_income", "total_revenue", "ebitda"].includes(l.code)}
                     isLoadingChildren={loadingChildren.has(l.id)}
                     onToggle={() => toggle(l.id)}
                   />
