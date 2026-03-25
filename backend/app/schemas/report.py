@@ -23,6 +23,29 @@ class ReportLineItem(BaseModel):
     py_variance_pct: float | None
 
 
+class PLKPIResponse(BaseModel):
+    property_id: uuid.UUID
+    property_name: str
+    start_date: date
+    end_date: date
+    occupancy: float
+    occupancy_budget: float
+    adr: int  # cents
+    adr_budget: int
+    revpar: int  # cents
+    revpar_budget: int
+    total_revenue: int  # cents
+    total_revenue_budget: int
+    gop: int  # cents
+    gop_budget: int
+    gop_margin: float
+    gop_margin_budget: float
+    noi: int  # cents
+    noi_budget: int
+    ebitda: int  # cents
+    ebitda_budget: int
+
+
 class InterMonthResponse(BaseModel):
     property_id: uuid.UUID
     property_name: str

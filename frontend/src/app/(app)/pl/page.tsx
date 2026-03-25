@@ -56,6 +56,29 @@ interface MonthCloseInfo {
   closed_at: string | null;
 }
 
+interface PLKPIData {
+  property_id: string;
+  property_name: string;
+  start_date: string;
+  end_date: string;
+  occupancy: number;
+  occupancy_budget: number;
+  adr: number;
+  adr_budget: number;
+  revpar: number;
+  revpar_budget: number;
+  total_revenue: number;
+  total_revenue_budget: number;
+  gop: number;
+  gop_budget: number;
+  gop_margin: number;
+  gop_margin_budget: number;
+  noi: number;
+  noi_budget: number;
+  ebitda: number;
+  ebitda_budget: number;
+}
+
 /* ═══════════════════════════════════════════════════
    Formatters
    ═══════════════════════════════════════════════════ */
@@ -186,64 +209,53 @@ interface KPI {
   favorable: boolean;
 }
 
-function extractKPIs(lines: PLLineItem[]): KPI[] {
-  const find = (pat: string) =>
-    lines.find((l) => l.name.toLowerCase().includes(pat));
+function kpiBadge(actual: number, budget: number, unit: "cents" | "pct" | "margin"): { badge: string; favorable: boolean } {
+  const diff = actual - budget;
+  const favorable = diff >= 0;
+  if (unit === "cents") {
+    const sign = diff >= 0 ? "+" : "";
+    return { badge: `${sign}${fmtShort(diff)} vs Bgt`, favorable };
+  }
+  if (unit === "pct") {
+    const pts = (diff * 100).toFixed(1);
+    return { badge: `${diff >= 0 ? "+" : ""}${pts}pt vs Bgt`, favorable };
+  }
+  // margin
+  const pts = (diff * 100).toFixed(1);
+  return { badge: `${diff >= 0 ? "+" : ""}${pts}pt vs Bgt`, favorable };
+}
 
-  const moneyKpi = (label: string, item: PLLineItem | undefined): KPI => {
-    if (!item) return { label, value: "—", badge: "", favorable: true };
-    const sign = item.variance_dollars >= 0 ? "+" : "";
-    return {
-      label,
-      value: fmtShort(item.actual),
-      badge: `${sign}${fmtShort(item.variance_dollars)}`,
-      favorable: item.variance_dollars >= 0,
-    };
-  };
+function extractKPIs(kpiData: PLKPIData | undefined): KPI[] {
+  if (!kpiData) {
+    return [
+      { label: "Occupancy", value: "—", badge: "", favorable: true },
+      { label: "ADR", value: "—", badge: "", favorable: true },
+      { label: "RevPAR", value: "—", badge: "", favorable: true },
+      { label: "Total Rev", value: "—", badge: "", favorable: true },
+      { label: "GOP", value: "—", badge: "", favorable: true },
+      { label: "NOI", value: "—", badge: "", favorable: true },
+      { label: "EBITDA", value: "—", badge: "", favorable: true },
+      { label: "STR RevPAR Idx", value: "—", badge: "", favorable: true },
+    ];
+  }
 
-  const pctKpi = (label: string, item: PLLineItem | undefined): KPI => {
-    if (!item) return { label, value: "—", badge: "", favorable: true };
-    return {
-      label,
-      value: fmtPct(item.actual / 10000) ?? "—",
-      badge: fmtPct(item.variance_pct),
-      favorable: (item.variance_dollars ?? 0) >= 0,
-    };
-  };
-
-  const occ = find("occupancy");
-  const adr = find("average daily rate") ?? lines.find((l) => l.name === "ADR");
-  const revpar = find("revpar");
+  const d = kpiData;
+  const occBadge = kpiBadge(d.occupancy, d.occupancy_budget, "pct");
+  const adrBadge = kpiBadge(d.adr, d.adr_budget, "cents");
+  const revparBadge = kpiBadge(d.revpar, d.revpar_budget, "cents");
+  const revBadge = kpiBadge(d.total_revenue, d.total_revenue_budget, "cents");
+  const gopBadge = kpiBadge(d.gop, d.gop_budget, "cents");
+  const noiBadge = kpiBadge(d.noi, d.noi_budget, "cents");
+  const ebitdaBadge = kpiBadge(d.ebitda, d.ebitda_budget, "cents");
 
   return [
-    occ
-      ? {
-          label: "Occupancy",
-          value: `${(occ.actual / 100).toFixed(1)}%`,
-          badge: `${occ.variance_dollars >= 0 ? "+" : ""}${(occ.variance_dollars / 100).toFixed(1)}pt vs Bgt`,
-          favorable: occ.variance_dollars >= 0,
-        }
-      : { label: "Occupancy", value: "—", badge: "", favorable: true },
-    adr
-      ? {
-          label: "ADR",
-          value: fmtDollars(adr.actual),
-          badge: fmtPct(adr.variance_pct),
-          favorable: (adr.variance_dollars ?? 0) >= 0,
-        }
-      : { label: "ADR", value: "—", badge: "", favorable: true },
-    revpar
-      ? {
-          label: "RevPAR",
-          value: fmtDollars(revpar.actual),
-          badge: fmtPct(revpar.variance_pct),
-          favorable: (revpar.variance_dollars ?? 0) >= 0,
-        }
-      : { label: "RevPAR", value: "—", badge: "", favorable: true },
-    moneyKpi("Total Rev", find("total revenue")),
-    moneyKpi("GOP", find("gross operating profit")),
-    moneyKpi("NOI", find("net operating income")),
-    moneyKpi("EBITDA", find("ebitda")),
+    { label: "Occupancy", value: `${(d.occupancy * 100).toFixed(1)}%`, ...occBadge },
+    { label: "ADR", value: fmtDollars(d.adr), ...adrBadge },
+    { label: "RevPAR", value: fmtDollars(d.revpar), ...revparBadge },
+    { label: "Total Rev", value: fmtShort(d.total_revenue), ...revBadge },
+    { label: "GOP", value: fmtShort(d.gop), ...gopBadge },
+    { label: "NOI", value: fmtShort(d.noi), ...noiBadge },
+    { label: "EBITDA", value: fmtShort(d.ebitda), ...ebitdaBadge },
     { label: "STR RevPAR Idx", value: "—", badge: "", favorable: true },
   ];
 }
@@ -344,6 +356,17 @@ export default function PLPage() {
     enabled: !!selectedPropertyId,
   });
 
+  const { data: kpiData } = useQuery<PLKPIData>({
+    queryKey: ["pl-kpis", selectedPropertyId, year, month],
+    queryFn: async () => {
+      const r = await api.get<ApiResponse<PLKPIData>>(
+        `/reports/pl-kpis/${selectedPropertyId}?start=${start}&end=${end}`,
+      );
+      return r.data.data;
+    },
+    enabled: !!selectedPropertyId,
+  });
+
   const { data: closes } = useQuery<MonthCloseInfo[]>({
     queryKey: ["month-close", selectedPropertyId],
     queryFn: async () => {
@@ -382,7 +405,7 @@ export default function PLPage() {
   }, [baseLines, childrenMap]);
 
   const vis = useMemo(() => visibleSet(lines, expanded), [lines, expanded]);
-  const kpis = useMemo(() => extractKPIs(baseLines), [baseLines]);
+  const kpis = useMemo(() => extractKPIs(kpiData), [kpiData]);
   const ff = useMemo(() => calcFlowFlex(baseLines), [baseLines]);
 
   const isClosed =
