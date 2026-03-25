@@ -466,7 +466,7 @@ class DashboardService:
     _DEPT_CONFIG = [
         {
             "name": "Rooms",
-            "revenue_codes": ["room_revenue", "other_room_revenue"],
+            "revenue_codes": ["room_revenue", "transient_revenue", "group_revenue", "other_room_revenue"],
             "expense_codes": [
                 "rooms_labor", "rooms_ota_commissions", "rooms_supplies", "rooms_other_expense",
             ],
@@ -499,8 +499,8 @@ class DashboardService:
         },
         {
             "name": "Mountain Ops",
-            "revenue_codes": ["mountain_lift_revenue", "mountain_other_revenue"],
-            "expense_codes": ["mountain_labor", "mountain_maintenance", "mountain_other_expense"],
+            "revenue_codes": ["mountain_lift_revenue", "mountain_rental_revenue", "mountain_lessons_revenue", "mountain_summer_revenue"],
+            "expense_codes": ["mountain_labor", "mountain_snowmaking", "mountain_other_expense"],
             "kpi1_label": "Skier Visits",
             "kpi1_type": "count",
             "count_code": "mountain_skier_visits",
