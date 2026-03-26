@@ -319,6 +319,19 @@ async def dept_detail(
 
     from sqlalchemy import text as sa_text
 
+    import logging, traceback
+    try:
+        return await _dept_detail_inner(dept_type, property_id, start, end, current_user, db, redis_client)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logging.getLogger(__name__).error("dept_detail error: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def _dept_detail_inner(dept_type, property_id, start, end, current_user, db, redis_client):
+    import calendar as _cal
+    from sqlalchemy import text as sa_text
+
     dept_cfg = _DEPT_TYPE_MAP.get(dept_type)
     if not dept_cfg:
         raise HTTPException(status_code=400, detail=f"Unknown department type: {dept_type}")
