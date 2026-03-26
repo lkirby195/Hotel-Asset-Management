@@ -69,6 +69,26 @@ export function useCreateCommentary() {
   });
 }
 
+export function useUpdateCommentary() {
+  const { getToken } = useAuth();
+  const api = createApiClient(getToken);
+  const { selectedPropertyId } = useProperty();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ commentId, text }: { commentId: string; text: string }) => {
+      const { data } = await api.put<ApiResponse<CommentaryItem>>(
+        `/commentary/${selectedPropertyId}/${commentId}`,
+        { text },
+      );
+      return data.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["commentary", selectedPropertyId] });
+    },
+  });
+}
+
 export function useDeleteCommentary() {
   const { getToken } = useAuth();
   const api = createApiClient(getToken);
@@ -77,7 +97,7 @@ export function useDeleteCommentary() {
 
   return useMutation({
     mutationFn: async (commentId: string) => {
-      await api.delete(`/commentary/${commentId}`);
+      await api.delete(`/commentary/${selectedPropertyId}/${commentId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["commentary", selectedPropertyId] });

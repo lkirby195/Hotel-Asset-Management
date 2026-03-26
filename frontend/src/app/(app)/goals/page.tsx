@@ -253,7 +253,7 @@ function GoalEditModal({
         metric_code: d.metric_code,
         target_value: Number(d.target_value),
         period_type: "annual",
-        year: 2026,
+        year: new Date().getFullYear(),
       }));
     onSave(goals);
   };
@@ -348,15 +348,17 @@ export default function GoalsPage() {
   const { selectedPropertyId } = useProperty();
   const { getToken } = useAuth();
   const api = createApiClient(getToken);
-  const { data: goals, isLoading } = useGoals(2026);
+  const currentYear = new Date().getFullYear();
+  const { data: goals, isLoading } = useGoals(currentYear);
   const createGoal = useCreateGoal();
+  const updateGoal = useUpdateGoal();
   const deleteGoal = useDeleteGoal();
 
   const [selectorOpen, setSelectorOpen] = useState(false);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
 
   // Fetch YTD KPIs for progress
-  const ytdStart = "2026-01-01";
+  const ytdStart = `${currentYear}-01-01`;
   const now = new Date();
   const ytdEnd = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
 
@@ -378,9 +380,9 @@ export default function GoalsPage() {
       const months: Record<number, PLKPIData> = {};
       const currentMonth = new Date().getMonth() + 1;
       for (let m = 1; m <= Math.min(currentMonth, 12); m++) {
-        const dim = new Date(2026, m, 0).getDate();
-        const mStart = `2026-${String(m).padStart(2, "0")}-01`;
-        const mEnd = `2026-${String(m).padStart(2, "0")}-${String(dim).padStart(2, "0")}`;
+        const dim = new Date(currentYear, m, 0).getDate();
+        const mStart = `${currentYear}-${String(m).padStart(2, "0")}-01`;
+        const mEnd = `${currentYear}-${String(m).padStart(2, "0")}-${String(dim).padStart(2, "0")}`;
         try {
           const r = await api.get<ApiResponse<PLKPIData>>(
             `/reports/pl-kpis/${selectedPropertyId}?start=${mStart}&end=${mEnd}`,
@@ -410,16 +412,38 @@ export default function GoalsPage() {
   }, [monthlyKpis]);
 
   const handleSaveGoals = async (newGoals: GoalCreateInput[]) => {
-    // Delete existing goals first, then create new ones
-    if (goals) {
-      for (const g of goals) {
-        await deleteGoal.mutateAsync(g.id);
+    try {
+      const existingByMetric = new Map(
+        (goals ?? []).map((g) => [g.metric_code, g]),
+      );
+      const newMetrics = new Set(newGoals.map((g) => g.metric_code));
+
+      // DELETE goals that were removed
+      for (const existing of goals ?? []) {
+        if (!newMetrics.has(existing.metric_code)) {
+          await deleteGoal.mutateAsync(existing.id);
+        }
       }
+
+      // PUT existing goals that changed, POST new ones
+      for (const g of newGoals) {
+        const existing = existingByMetric.get(g.metric_code);
+        if (existing) {
+          if (existing.target_value !== g.target_value) {
+            await updateGoal.mutateAsync({
+              goalId: existing.id,
+              input: { target_value: g.target_value },
+            });
+          }
+        } else {
+          await createGoal.mutateAsync(g);
+        }
+      }
+
+      setSelectorOpen(false);
+    } catch (err) {
+      console.error("Failed to save goals:", err);
     }
-    for (const g of newGoals) {
-      await createGoal.mutateAsync(g);
-    }
-    setSelectorOpen(false);
   };
 
   if (!selectedPropertyId) {
@@ -441,7 +465,7 @@ export default function GoalsPage() {
 
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-medium text-surface-700">Annual Goals — 2026</h2>
+          <h2 className="text-sm font-medium text-surface-700">Annual Goals — {currentYear}</h2>
           <button
             onClick={() => setSelectorOpen(true)}
             className="rounded-md bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand/90"
@@ -562,7 +586,7 @@ export default function GoalsPage() {
         onClose={() => setSelectorOpen(false)}
         existingGoals={annualGoals}
         onSave={handleSaveGoals}
-        isSaving={createGoal.isPending || deleteGoal.isPending}
+        isSaving={createGoal.isPending || updateGoal.isPending || deleteGoal.isPending}
       />
     </div>
   );

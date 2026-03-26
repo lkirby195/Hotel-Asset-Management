@@ -1,5 +1,4 @@
 import uuid
-from typing import Optional
 
 from sqlalchemy import BigInteger, ForeignKey, Integer, SmallInteger, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
@@ -38,7 +37,7 @@ class Goal(Base, TenantMixin, TimestampMixin):
     target_value: Mapped[int] = mapped_column(BigInteger, nullable=False)
     period_type: Mapped[str] = mapped_column(String(20), nullable=False)  # 'monthly' or 'annual'
     year: Mapped[int] = mapped_column(Integer, nullable=False)
-    month: Mapped[Optional[int]] = mapped_column(SmallInteger, nullable=True)  # null for annual
+    month: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=0)  # 0 = annual sentinel
 
     # Relationships
     property = relationship("Property", lazy="selectin")

@@ -13,6 +13,10 @@ class CommentaryCreate(BaseModel):
     text: str = Field(..., min_length=1)
 
 
+class CommentaryUpdate(BaseModel):
+    text: str = Field(..., min_length=1)
+
+
 class CommentaryResponse(BaseModel):
     id: uuid.UUID
     tenant_id: uuid.UUID

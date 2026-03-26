@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.dependencies import get_current_user, get_db_session, require_property_access
 from app.models.user import User
-from app.schemas.commentary import CommentaryCreate, CommentaryResponse
+from app.schemas.commentary import CommentaryCreate, CommentaryResponse, CommentaryUpdate
 from app.schemas.common import APIResponse
 from app.services.commentary_service import CommentaryService
 
@@ -75,12 +75,33 @@ async def create_commentary(
     return APIResponse(data=_to_response(comment))
 
 
+@router.put(
+    "/{property_id}/{comment_id}",
+    response_model=APIResponse[CommentaryResponse],
+)
+async def update_commentary(
+    comment_id: uuid.UUID,
+    body: CommentaryUpdate,
+    property_id: uuid.UUID = Depends(require_property_access),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db_session),
+):
+    updated = await commentary_service.update(db, comment_id, current_user.id, body.text)
+    if not updated:
+        raise HTTPException(
+            status_code=404,
+            detail="Comment not found or you are not the author",
+        )
+    return APIResponse(data=_to_response(updated))
+
+
 @router.delete(
-    "/{comment_id}",
+    "/{property_id}/{comment_id}",
     response_model=APIResponse[dict],
 )
 async def delete_commentary(
     comment_id: uuid.UUID,
+    property_id: uuid.UUID = Depends(require_property_access),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):

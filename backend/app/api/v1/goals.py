@@ -58,12 +58,13 @@ async def create_goal(
 
 
 @router.put(
-    "/{goal_id}",
+    "/{property_id}/{goal_id}",
     response_model=APIResponse[GoalResponse],
 )
 async def update_goal(
     goal_id: uuid.UUID,
     body: GoalUpdate,
+    property_id: uuid.UUID = Depends(require_property_access),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):
@@ -82,11 +83,12 @@ async def update_goal(
 
 
 @router.delete(
-    "/{goal_id}",
+    "/{property_id}/{goal_id}",
     response_model=APIResponse[dict],
 )
 async def delete_goal(
     goal_id: uuid.UUID,
+    property_id: uuid.UUID = Depends(require_property_access),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):

@@ -242,7 +242,7 @@ export function PortfolioTable({ period }: PortfolioTableProps) {
             const totEbitda = rows.reduce((s, r) => s + r.ebitda, 0);
             const totEbitdaBgt = rows.reduce((s, r) => s + r.ebitda_budget, 0);
 
-            // Revenue-weighted averages for rate metrics
+            // TODO: weighted avg should use room nights when available; total_revenue proxy for now
             const revWeight = totRev || 1;
             const revBgtWeight = totRevBgt || 1;
             const avgOcc = rows.reduce((s, r) => s + r.occupancy * r.total_revenue, 0) / revWeight;

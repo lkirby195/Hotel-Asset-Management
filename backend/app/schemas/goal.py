@@ -14,11 +14,11 @@ class GoalCreate(BaseModel):
 
 
 class GoalUpdate(BaseModel):
-    target_value: Optional[int] = None
-    metric_code: Optional[str] = None
-    period_type: Optional[str] = None
+    target_value: Optional[int] = Field(None, ge=0)
+    metric_code: Optional[str] = Field(None, max_length=50)
+    period_type: Optional[str] = Field(None, pattern="^(monthly|annual)$")
     year: Optional[int] = None
-    month: Optional[int] = None
+    month: Optional[int] = Field(None, ge=1, le=12)
 
 
 class GoalResponse(BaseModel):

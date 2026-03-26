@@ -32,6 +32,7 @@ class CommentaryService:
         )
         db.add(comment)
         await db.flush()
+        await db.refresh(comment, attribute_names=['user'])
         return comment
 
     async def list_by_property_month(
@@ -52,6 +53,27 @@ class CommentaryService:
         )
         result = await db.execute(stmt)
         return list(result.scalars().all())
+
+    async def update(
+        self,
+        db: AsyncSession,
+        comment_id: uuid.UUID,
+        user_id: uuid.UUID,
+        text: str,
+    ) -> Optional[Commentary]:
+        result = await db.execute(
+            select(Commentary).where(
+                Commentary.id == comment_id,
+                Commentary.user_id == user_id,
+            )
+        )
+        comment = result.scalar_one_or_none()
+        if not comment:
+            return None
+        comment.text = text
+        await db.flush()
+        await db.refresh(comment, attribute_names=['user'])
+        return comment
 
     async def delete(self, db: AsyncSession, comment_id: uuid.UUID, user_id: uuid.UUID) -> bool:
         """Delete a comment. Only the author can delete their own comments."""

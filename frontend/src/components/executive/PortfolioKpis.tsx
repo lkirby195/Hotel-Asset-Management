@@ -96,7 +96,7 @@ export function PortfolioKpis({ period }: PortfolioKpisProps) {
         const totalEbitda = kpiResults.reduce((s, k) => s + k.ebitda, 0);
         const totalEbitdaBgt = kpiResults.reduce((s, k) => s + k.ebitda_budget, 0);
 
-        // Weight occupancy/ADR/RevPAR by total_revenue as proxy for property size
+        // TODO: weighted avg should use room nights when available; total_revenue proxy for now
         const revWeight = totalRev || 1;
         const revBgtWeight = totalRevBgt || 1;
 

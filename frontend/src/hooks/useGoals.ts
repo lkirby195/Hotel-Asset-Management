@@ -84,7 +84,7 @@ export function useUpdateGoal() {
   return useMutation({
     mutationFn: async ({ goalId, input }: { goalId: string; input: GoalUpdateInput }) => {
       const { data } = await api.put<ApiResponse<GoalFromAPI>>(
-        `/goals/${goalId}`,
+        `/goals/${selectedPropertyId}/${goalId}`,
         input,
       );
       return data.data;
@@ -103,7 +103,7 @@ export function useDeleteGoal() {
 
   return useMutation({
     mutationFn: async (goalId: string) => {
-      await api.delete(`/goals/${goalId}`);
+      await api.delete(`/goals/${selectedPropertyId}/${goalId}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["goals", selectedPropertyId] });

@@ -28,7 +28,7 @@ class GoalService:
             target_value=target_value,
             period_type=period_type,
             year=year,
-            month=month,
+            month=month if month is not None else 0,
         )
         db.add(goal)
         await db.flush()
