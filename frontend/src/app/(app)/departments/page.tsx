@@ -4,12 +4,12 @@ import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import {
-  Home,
-  Coffee,
-  Sparkles,
+  BedDouble,
+  UtensilsCrossed,
   Flag,
   ShoppingBag,
   Mountain,
+  Sparkles,
   MoreHorizontal,
 } from "lucide-react";
 import { createApiClient } from "@/lib/api-client";
@@ -21,9 +21,9 @@ import type { DeptSnapshotResponse, DeptSnapshotCard } from "@/types/dashboard";
 import type { LucideIcon } from "lucide-react";
 
 const DEPT_ICON: Record<string, LucideIcon> = {
-  Rooms: Home,
-  "F&B": Coffee,
-  "Food & Beverage": Coffee,
+  Rooms: BedDouble,
+  "F&B": UtensilsCrossed,
+  "Food & Beverage": UtensilsCrossed,
   Golf: Flag,
   "Mountain Ops": Mountain,
   Spa: Sparkles,
@@ -68,14 +68,14 @@ export default function DepartmentsIndex() {
     );
   }
 
-  const cards = data?.cards?.filter((c) => c.has_data) ?? [];
+  const cards = data?.cards?.filter((c: DeptSnapshotCard) => c.has_data) ?? [];
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
       <div>
         <h2 className="text-xl font-bold text-surface-900">Departments</h2>
         <p className="text-sm text-surface-500 mt-0.5">
-          {property?.name ?? "Property"} — Month-to-Date Performance
+          {property?.name ?? "Property"} -- Month-to-Date Performance
         </p>
       </div>
 
@@ -94,7 +94,7 @@ export default function DepartmentsIndex() {
         </div>
       ) : (
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-5">
-          {cards.map((card) => {
+          {cards.map((card: DeptSnapshotCard) => {
             const Icon = DEPT_ICON[card.dept_name] ?? MoreHorizontal;
             const slug =
               DEPT_SLUG[card.dept_name] ?? card.dept_name.toLowerCase();
@@ -116,20 +116,20 @@ export default function DepartmentsIndex() {
                 </div>
                 <div className="flex items-baseline justify-between">
                   <div>
-                    <div className="text-[10px] font-medium text-surface-400 uppercase">
+                    <div className="text-[10px] font-medium text-surface-400 uppercase tracking-wide">
                       MTD Revenue
                     </div>
-                    <div className="text-lg font-bold text-surface-900">
+                    <div className="text-lg font-bold text-surface-900 tabular-nums">
                       {formatCurrency(card.revenue)}
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] font-medium text-surface-400 uppercase">
+                    <div className="text-[10px] font-medium text-surface-400 uppercase tracking-wide">
                       vs Budget
                     </div>
                     <span
                       className={cn(
-                        "inline-flex px-1.5 py-0.5 rounded text-xs font-medium",
+                        "inline-flex px-1.5 py-0.5 rounded text-xs font-medium tabular-nums",
                         (card.variance_pct ?? 0) >= 0
                           ? "text-positive-700 bg-positive-50"
                           : "text-negative-700 bg-negative-50",
@@ -137,21 +137,33 @@ export default function DepartmentsIndex() {
                     >
                       {(card.variance_pct ?? 0) >= 0 ? "+" : ""}
                       {card.variance_pct != null
-                        ? `${(card.variance_pct * 100).toFixed(1)}%`
-                        : "—"}
+                        ? `${card.variance_pct.toFixed(1)}%`
+                        : "--"}
                     </span>
                   </div>
                 </div>
-                {card.kpi1_label && (
-                  <div className="mt-2 pt-2 border-t border-surface-100 flex items-center justify-between">
-                    <span className="text-[10px] text-surface-400">
-                      {card.kpi1_label}
-                    </span>
-                    <span className="text-xs font-semibold text-surface-700">
-                      {card.kpi1_value}
-                    </span>
-                  </div>
-                )}
+                <div className="mt-2 pt-2 border-t border-surface-100 space-y-1">
+                  {card.kpi1_label && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-surface-400">
+                        {card.kpi1_label}
+                      </span>
+                      <span className="text-xs font-semibold text-surface-700 tabular-nums">
+                        {card.kpi1_value}
+                      </span>
+                    </div>
+                  )}
+                  {card.kpi2_label && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] text-surface-400">
+                        {card.kpi2_label}
+                      </span>
+                      <span className="text-xs font-semibold text-surface-700 tabular-nums">
+                        {card.kpi2_value}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </button>
             );
           })}
