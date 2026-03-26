@@ -10,10 +10,17 @@ import {
   FileText,
   AlertTriangle,
   Loader2,
+  X,
 } from "lucide-react";
 import { createApiClient } from "@/lib/api-client";
 import { useProperty } from "@/providers/property-provider";
 import { cn } from "@/lib/utils";
+import {
+  useCommentary,
+  useCreateCommentary,
+  useDeleteCommentary,
+  type CommentaryItem,
+} from "@/hooks/useCommentary";
 import type { ApiResponse } from "@/types/api";
 
 /* ═══════════════════════════════════════════════════
@@ -638,54 +645,7 @@ export default function PLPage() {
       )}
 
       {/* ── Commentary ────────────────────────────── */}
-      <div className="bg-white rounded-xl border border-surface-200 p-5 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-semibold text-surface-700">
-            Commentary — {monthName(month)} {year}
-          </h3>
-          <button className="flex items-center gap-1 text-xs text-brand-600 font-medium hover:text-brand-800 px-3 py-1.5 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors">
-            + Add Comment
-          </button>
-        </div>
-        <div className="space-y-3">
-          <Comment
-            tags={[
-              { label: "Market Conditions", cls: "bg-amber-100 text-amber-800" },
-              { label: "Rooms", cls: "bg-blue-100 text-blue-800" },
-            ]}
-            author="Jason M."
-            date={`${monthShort(month)} ${days}`}
-            text="Presidents' Day weekend drove strong transient demand. ADR pushed above $310 for 3 consecutive nights. Group block exceeded pickup expectations by 12%."
-          />
-          <Comment
-            tags={[
-              { label: "Staffing", cls: "bg-red-100 text-red-800" },
-              { label: "F&B", cls: "bg-purple-100 text-purple-800" },
-            ]}
-            author="Jason M."
-            date={`${monthShort(month)} ${days}`}
-            text="Restaurant covers below budget due to 2 server vacancies. Food cost elevated — new line cook training, expect normalization next month. Bar revenue strong on apres-ski traffic."
-          />
-          <Comment
-            tags={[
-              { label: "One-Time Event", cls: "bg-green-100 text-green-800" },
-              { label: "Mountain Ops", cls: "bg-cyan-100 text-cyan-800" },
-            ]}
-            author="Jason M."
-            date={`${monthShort(month)} ${days}`}
-            text="Exceptional snow conditions drove strong YoY increase in mountain ops revenue. Extended season operations approved through April 6 based on snowpack levels."
-          />
-          <Comment
-            tags={[
-              { label: "Property Issue", cls: "bg-orange-100 text-orange-800" },
-              { label: "Spa", cls: "bg-pink-100 text-pink-800" },
-            ]}
-            author="Sarah K."
-            date={`${monthShort(month)} 15`}
-            text="Spa HVAC unit failure resulted in 4-day closure of treatment rooms. Insurance claim filed. Estimated revenue impact ($18K). Temporary units installed, full repair scheduled for early next month."
-          />
-        </div>
-      </div>
+      <CommentarySection year={year} month={month} />
 
       {/* ── Footer ────────────────────────────────── */}
       <div className="text-center text-xs text-surface-400 pb-4">
@@ -984,42 +944,193 @@ function FlowFlexRows({ ff }: { ff: FlowFlex }) {
 }
 
 /* ═══════════════════════════════════════════════════
-   Commentary
+   Commentary Section (API-backed)
    ═══════════════════════════════════════════════════ */
 
-function Comment({
-  tags,
-  author,
-  date,
-  text,
-}: {
-  tags: { label: string; cls: string }[];
-  author: string;
-  date: string;
-  text: string;
-}) {
+const CATEGORY_TAGS = [
+  { value: "market_conditions", label: "Market Conditions", cls: "bg-amber-100 text-amber-800" },
+  { value: "staffing", label: "Staffing", cls: "bg-red-100 text-red-800" },
+  { value: "one_time_event", label: "One-Time Event", cls: "bg-green-100 text-green-800" },
+  { value: "property_issue", label: "Property Issue", cls: "bg-orange-100 text-orange-800" },
+];
+
+const DEPARTMENT_TAGS = [
+  "Rooms", "F&B", "Spa", "Golf", "Mountain Ops", "Retail", "A&G", "S&M", "POM", "Energy",
+];
+
+function categoryStyle(tag: string): { label: string; cls: string } {
+  const found = CATEGORY_TAGS.find((c) => c.value === tag);
+  return found ?? { label: tag, cls: "bg-surface-100 text-surface-800" };
+}
+
+function deptStyle(tag: string): string {
+  const map: Record<string, string> = {
+    Rooms: "bg-blue-100 text-blue-800",
+    "F&B": "bg-purple-100 text-purple-800",
+    Spa: "bg-pink-100 text-pink-800",
+    Golf: "bg-emerald-100 text-emerald-800",
+    "Mountain Ops": "bg-cyan-100 text-cyan-800",
+    Retail: "bg-violet-100 text-violet-800",
+  };
+  return map[tag] ?? "bg-surface-100 text-surface-700";
+}
+
+function CommentarySection({ year, month }: { year: number; month: number }) {
+  const { data: comments, isLoading } = useCommentary(year, month);
+  const createComment = useCreateCommentary();
+  const deleteComment = useDeleteCommentary();
+
+  const [showForm, setShowForm] = useState(false);
+  const [formCategory, setFormCategory] = useState("market_conditions");
+  const [formDept, setFormDept] = useState("");
+  const [formText, setFormText] = useState("");
+
+  const handleSubmit = async () => {
+    if (!formText.trim()) return;
+    await createComment.mutateAsync({
+      year,
+      month,
+      category_tag: formCategory,
+      department_tag: formDept || null,
+      text: formText.trim(),
+    });
+    setFormText("");
+    setFormDept("");
+    setShowForm(false);
+  };
+
+  const handleDelete = async (id: string) => {
+    await deleteComment.mutateAsync(id);
+  };
+
   return (
-    <div className="border-l-[3px] border-brand-500 bg-surface-50 rounded-lg p-4">
-      <div className="flex items-center gap-2 mb-2">
-        {tags.map((t) => (
-          <span
-            key={t.label}
-            className={cn(
-              "inline-flex px-2 py-0.5 rounded text-[10px] font-medium",
-              t.cls,
-            )}
-          >
-            {t.label}
-          </span>
-        ))}
-        <span className="text-xs text-surface-400 ml-auto">
-          {author} | {date}
-        </span>
+    <div className="bg-white rounded-xl border border-surface-200 p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-surface-700">
+          Commentary — {monthName(month)} {year}
+        </h3>
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="flex items-center gap-1 text-xs text-brand-600 font-medium hover:text-brand-800 px-3 py-1.5 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
+        >
+          {showForm ? "Cancel" : "+ Add Comment"}
+        </button>
       </div>
-      <p className="text-sm text-surface-700">{text}</p>
+
+      {/* Add comment form */}
+      {showForm && (
+        <div className="border border-brand-200 bg-brand-50/30 rounded-lg p-4 mb-4 space-y-3">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Category</label>
+              <select
+                value={formCategory}
+                onChange={(e) => setFormCategory(e.target.value)}
+                className="w-full rounded-md border border-surface-200 px-2 py-1.5 text-sm"
+              >
+                {CATEGORY_TAGS.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex-1">
+              <label className="text-xs font-medium text-surface-600 mb-1 block">Department</label>
+              <select
+                value={formDept}
+                onChange={(e) => setFormDept(e.target.value)}
+                className="w-full rounded-md border border-surface-200 px-2 py-1.5 text-sm"
+              >
+                <option value="">— None —</option>
+                {DEPARTMENT_TAGS.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs font-medium text-surface-600 mb-1 block">Comment</label>
+            <textarea
+              value={formText}
+              onChange={(e) => setFormText(e.target.value)}
+              rows={3}
+              className="w-full rounded-md border border-surface-200 px-3 py-2 text-sm resize-none"
+              placeholder="Enter your commentary..."
+            />
+          </div>
+          <div className="flex justify-end">
+            <button
+              onClick={handleSubmit}
+              disabled={!formText.trim() || createComment.isPending}
+              className={cn(
+                "rounded-md px-4 py-1.5 text-sm text-white",
+                formText.trim() && !createComment.isPending
+                  ? "bg-brand hover:bg-brand/90"
+                  : "bg-surface-300 cursor-not-allowed",
+              )}
+            >
+              {createComment.isPending ? "Submitting..." : "Submit"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Comments list */}
+      <div className="space-y-3">
+        {isLoading ? (
+          <div className="text-center py-4 text-sm text-surface-400">Loading comments...</div>
+        ) : comments && comments.length > 0 ? (
+          comments.map((c) => {
+            const cat = categoryStyle(c.category_tag);
+            const tags: { label: string; cls: string }[] = [
+              { label: cat.label, cls: cat.cls },
+            ];
+            if (c.department_tag) {
+              tags.push({ label: c.department_tag, cls: deptStyle(c.department_tag) });
+            }
+            const dateStr = new Date(c.created_at).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+            });
+
+            return (
+              <div key={c.id} className="border-l-[3px] border-brand-500 bg-surface-50 rounded-lg p-4 group">
+                <div className="flex items-center gap-2 mb-2">
+                  {tags.map((t) => (
+                    <span
+                      key={t.label}
+                      className={cn(
+                        "inline-flex px-2 py-0.5 rounded text-[10px] font-medium",
+                        t.cls,
+                      )}
+                    >
+                      {t.label}
+                    </span>
+                  ))}
+                  <span className="text-xs text-surface-400 ml-auto">
+                    {c.user_name} | {dateStr}
+                  </span>
+                  <button
+                    onClick={() => handleDelete(c.id)}
+                    className="opacity-0 group-hover:opacity-100 text-surface-400 hover:text-negative-500 transition-opacity"
+                    title="Delete comment"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <p className="text-sm text-surface-700">{c.text}</p>
+              </div>
+            );
+          })
+        ) : (
+          <div className="text-center py-4 text-sm text-surface-400">
+            No commentary for this month yet.
+          </div>
+        )}
+      </div>
     </div>
   );
 }
+
 
 /* ═══════════════════════════════════════════════════
    Loading skeleton

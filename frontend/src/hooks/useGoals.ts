@@ -3,55 +3,110 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import { createApiClient } from "@/lib/api-client";
-import { MOCK_GOALS_RESPONSE } from "@/lib/mock/goals-data";
-import type { GoalsResponse, GoalInput, AvailableMetric } from "@/types/goals";
-import type { APIResponse } from "@/lib/types";
+import { useProperty } from "@/providers/property-provider";
+import type { ApiResponse } from "@/types/api";
 
-// TODO: Remove when API is ready
-const USE_MOCK_GOALS = true;
+export interface GoalFromAPI {
+  id: string;
+  tenant_id: string;
+  property_id: string;
+  user_id: string;
+  metric_code: string;
+  target_value: number;
+  period_type: string;
+  year: number;
+  month: number | null;
+  created_at: string;
+  updated_at: string;
+}
 
-export function useGoals() {
+export interface GoalCreateInput {
+  metric_code: string;
+  target_value: number;
+  period_type: string;
+  year: number;
+  month?: number | null;
+}
+
+export interface GoalUpdateInput {
+  target_value?: number;
+  metric_code?: string;
+  period_type?: string;
+  year?: number;
+  month?: number | null;
+}
+
+export function useGoals(year?: number) {
   const { getToken } = useAuth();
   const api = createApiClient(getToken);
+  const { selectedPropertyId } = useProperty();
 
-  return useQuery({
-    queryKey: ["goals"],
-    queryFn: async (): Promise<GoalsResponse> => {
-      if (USE_MOCK_GOALS) return MOCK_GOALS_RESPONSE;
-      const { data } = await api.get<APIResponse<GoalsResponse>>("/goals");
+  return useQuery<GoalFromAPI[]>({
+    queryKey: ["goals", selectedPropertyId, year],
+    queryFn: async () => {
+      const params = year ? `?year=${year}` : "";
+      const { data } = await api.get<ApiResponse<GoalFromAPI[]>>(
+        `/goals/${selectedPropertyId}${params}`,
+      );
       return data.data;
     },
+    enabled: !!selectedPropertyId,
     staleTime: 5 * 60 * 1000,
-    refetchOnWindowFocus: false,
   });
 }
 
-export function useSetGoals() {
+export function useCreateGoal() {
   const { getToken } = useAuth();
   const api = createApiClient(getToken);
+  const { selectedPropertyId } = useProperty();
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (goals: GoalInput[]) => {
-      const { data } = await api.put<APIResponse<GoalsResponse>>("/goals", { goals });
+    mutationFn: async (input: GoalCreateInput) => {
+      const { data } = await api.post<ApiResponse<GoalFromAPI>>(
+        `/goals/${selectedPropertyId}`,
+        input,
+      );
       return data.data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["goals"] });
+      queryClient.invalidateQueries({ queryKey: ["goals", selectedPropertyId] });
     },
   });
 }
 
-export function useAvailableMetrics() {
+export function useUpdateGoal() {
   const { getToken } = useAuth();
   const api = createApiClient(getToken);
+  const { selectedPropertyId } = useProperty();
+  const queryClient = useQueryClient();
 
-  return useQuery({
-    queryKey: ["goals", "available-metrics"],
-    queryFn: async (): Promise<AvailableMetric[]> => {
-      const { data } = await api.get<APIResponse<{ metrics: AvailableMetric[] }>>("/goals/available-metrics");
-      return data.data.metrics;
+  return useMutation({
+    mutationFn: async ({ goalId, input }: { goalId: string; input: GoalUpdateInput }) => {
+      const { data } = await api.put<ApiResponse<GoalFromAPI>>(
+        `/goals/${goalId}`,
+        input,
+      );
+      return data.data;
     },
-    staleTime: 30 * 60 * 1000,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["goals", selectedPropertyId] });
+    },
+  });
+}
+
+export function useDeleteGoal() {
+  const { getToken } = useAuth();
+  const api = createApiClient(getToken);
+  const { selectedPropertyId } = useProperty();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (goalId: string) => {
+      await api.delete(`/goals/${goalId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["goals", selectedPropertyId] });
+    },
   });
 }

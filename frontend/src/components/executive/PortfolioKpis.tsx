@@ -89,20 +89,39 @@ export function PortfolioKpis({ period }: PortfolioKpisProps) {
   });
 
   const agg = kpiResults && kpiResults.length > 0
-    ? {
-        avgOcc: kpiResults.reduce((s, k) => s + k.occupancy, 0) / kpiResults.length,
-        avgOccBgt: kpiResults.reduce((s, k) => s + k.occupancy_budget, 0) / kpiResults.length,
-        avgAdr: kpiResults.reduce((s, k) => s + k.adr, 0) / kpiResults.length,
-        avgAdrBgt: kpiResults.reduce((s, k) => s + k.adr_budget, 0) / kpiResults.length,
-        avgRevpar: kpiResults.reduce((s, k) => s + k.revpar, 0) / kpiResults.length,
-        avgRevparBgt: kpiResults.reduce((s, k) => s + k.revpar_budget, 0) / kpiResults.length,
-        totalRev: kpiResults.reduce((s, k) => s + k.total_revenue, 0),
-        totalRevBgt: kpiResults.reduce((s, k) => s + k.total_revenue_budget, 0),
-        totalEbitda: kpiResults.reduce((s, k) => s + k.ebitda, 0),
-        totalEbitdaBgt: kpiResults.reduce((s, k) => s + k.ebitda_budget, 0),
-        count: kpiResults.length,
-        beating: kpiResults.filter((k) => k.total_revenue >= k.total_revenue_budget).length,
-      }
+    ? (() => {
+        // Use revenue-weighted averages for rate metrics (occupancy, ADR, RevPAR)
+        const totalRev = kpiResults.reduce((s, k) => s + k.total_revenue, 0);
+        const totalRevBgt = kpiResults.reduce((s, k) => s + k.total_revenue_budget, 0);
+        const totalEbitda = kpiResults.reduce((s, k) => s + k.ebitda, 0);
+        const totalEbitdaBgt = kpiResults.reduce((s, k) => s + k.ebitda_budget, 0);
+
+        // Weight occupancy/ADR/RevPAR by total_revenue as proxy for property size
+        const revWeight = totalRev || 1;
+        const revBgtWeight = totalRevBgt || 1;
+
+        const avgOcc = kpiResults.reduce((s, k) => s + k.occupancy * k.total_revenue, 0) / revWeight;
+        const avgOccBgt = kpiResults.reduce((s, k) => s + k.occupancy_budget * k.total_revenue_budget, 0) / revBgtWeight;
+        const avgAdr = kpiResults.reduce((s, k) => s + k.adr * k.total_revenue, 0) / revWeight;
+        const avgAdrBgt = kpiResults.reduce((s, k) => s + k.adr_budget * k.total_revenue_budget, 0) / revBgtWeight;
+        const avgRevpar = kpiResults.reduce((s, k) => s + k.revpar * k.total_revenue, 0) / revWeight;
+        const avgRevparBgt = kpiResults.reduce((s, k) => s + k.revpar_budget * k.total_revenue_budget, 0) / revBgtWeight;
+
+        return {
+          avgOcc,
+          avgOccBgt,
+          avgAdr,
+          avgAdrBgt,
+          avgRevpar,
+          avgRevparBgt,
+          totalRev,
+          totalRevBgt,
+          totalEbitda,
+          totalEbitdaBgt,
+          count: kpiResults.length,
+          beating: kpiResults.filter((k) => k.total_revenue >= k.total_revenue_budget).length,
+        };
+      })()
     : null;
 
   const cards = agg

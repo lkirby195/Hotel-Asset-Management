@@ -126,7 +126,7 @@ export function PortfolioTable({ period }: PortfolioTableProps) {
   const isUnderperformer = (row: PLKPIData) => {
     const revVar = variancePct(row.total_revenue, row.total_revenue_budget);
     const ebitdaVar = variancePct(row.ebitda, row.ebitda_budget);
-    return revVar < -10 || ebitdaVar < -10;
+    return revVar < -5 || ebitdaVar < -5;
   };
 
   return (
@@ -241,10 +241,15 @@ export function PortfolioTable({ period }: PortfolioTableProps) {
             const totRevBgt = rows.reduce((s, r) => s + r.total_revenue_budget, 0);
             const totEbitda = rows.reduce((s, r) => s + r.ebitda, 0);
             const totEbitdaBgt = rows.reduce((s, r) => s + r.ebitda_budget, 0);
-            const avgOcc = rows.reduce((s, r) => s + r.occupancy, 0) / rows.length;
-            const avgOccBgt = rows.reduce((s, r) => s + r.occupancy_budget, 0) / rows.length;
-            const avgAdr = rows.reduce((s, r) => s + r.adr, 0) / rows.length;
-            const avgRevpar = rows.reduce((s, r) => s + r.revpar, 0) / rows.length;
+
+            // Revenue-weighted averages for rate metrics
+            const revWeight = totRev || 1;
+            const revBgtWeight = totRevBgt || 1;
+            const avgOcc = rows.reduce((s, r) => s + r.occupancy * r.total_revenue, 0) / revWeight;
+            const avgOccBgt = rows.reduce((s, r) => s + r.occupancy_budget * r.total_revenue_budget, 0) / revBgtWeight;
+            const avgAdr = rows.reduce((s, r) => s + r.adr * r.total_revenue, 0) / revWeight;
+            const avgRevpar = rows.reduce((s, r) => s + r.revpar * r.total_revenue, 0) / revWeight;
+
             const margin = totRev ? (totEbitda / totRev) * 100 : 0;
             const revVarT = variancePct(totRev, totRevBgt);
             const ebitdaVarT = variancePct(totEbitda, totEbitdaBgt);
