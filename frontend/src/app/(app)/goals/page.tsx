@@ -234,7 +234,7 @@ function GoalEditModal({
   >(() =>
     existingGoals.map((g) => ({
       metric_code: g.metric_code,
-      target_value: g.target_value,
+      target_value: g.target_value / 100,
     })),
   );
 
@@ -262,7 +262,7 @@ function GoalEditModal({
       .filter((d) => d.metric_code && Number(d.target_value) > 0)
       .map((d) => ({
         metric_code: d.metric_code,
-        target_value: Number(d.target_value),
+        target_value: Math.round(Number(d.target_value) * 100),
         period_type: "annual",
         year: new Date().getFullYear(),
       }));
@@ -308,15 +308,21 @@ function GoalEditModal({
                 </span>
                 <div className="flex items-center gap-1.5">
                   <label className="text-xs text-surface-500">Target:</label>
+                  {def?.format === "currency" && (
+                    <span className="text-xs text-surface-500">$</span>
+                  )}
                   <input
                     type="number"
                     value={draft.target_value}
                     onChange={(e) => updateTarget(idx, e.target.value)}
                     className="w-28 rounded border border-surface-200 px-2 py-1 text-xs tabular-nums"
                     placeholder={
-                      def?.format === "percentage" ? "basis pts" : "cents"
+                      def?.format === "percentage" ? "e.g. 70" : "e.g. 210"
                     }
                   />
+                  {def?.format === "percentage" && (
+                    <span className="text-xs text-surface-500">%</span>
+                  )}
                 </div>
               </div>
             );
