@@ -24,15 +24,7 @@ const DEPT_ROUTE_MAP: Record<string, string> = {
   Retail: "retail",
 };
 
-const DEPT_EMOJI: Record<string, string> = {
-  Rooms: "\uD83D\uDECF\uFE0F",
-  "F&B": "\uD83C\uDF7D\uFE0F",
-  "Food & Beverage": "\uD83C\uDF7D\uFE0F",
-  Golf: "\u26F3",
-  "Mountain Ops": "\u26F7\uFE0F",
-  Spa: "\uD83D\uDC86",
-  Retail: "\uD83D\uDECD\uFE0F",
-};
+// No emojis in professional UI
 
 function budgetLabel(budget: number): string {
   const dollars = Math.abs(budget) / 100;
@@ -42,7 +34,7 @@ function budgetLabel(budget: number): string {
 }
 
 function SnapshotCard({ card, onClick }: { card: DeptSnapshotCard; onClick: () => void }) {
-  const emoji = DEPT_EMOJI[card.dept_name] ?? "";
+  const emoji = "";
 
   return (
     <button
