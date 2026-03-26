@@ -318,11 +318,11 @@ function calcFlowFlex(lines: PLLineItem[]): FlowFlex | null {
    Date helpers
    ═══════════════════════════════════════════════════ */
 
-function monthName(m: number) {
-  return new Date(2026, m - 1).toLocaleString("en-US", { month: "long" });
+function monthName(m: number, y: number = new Date().getFullYear()) {
+  return new Date(y, m - 1).toLocaleString("en-US", { month: "long" });
 }
-function monthShort(m: number) {
-  return new Date(2026, m - 1).toLocaleString("en-US", { month: "short" });
+function monthShort(m: number, y: number = new Date().getFullYear()) {
+  return new Date(y, m - 1).toLocaleString("en-US", { month: "short" });
 }
 function daysIn(y: number, m: number) {
   return new Date(y, m, 0).getDate();
@@ -340,7 +340,7 @@ export default function PLPage() {
   const { getToken } = useAuth();
   const api = createApiClient(getToken);
 
-  const [year, setYear] = useState(2026);
+  const [year, setYear] = useState(new Date().getFullYear());
   const [month, setMonth] = useState(2);
   const view = "detail" as const; // Summary view removed — detail shows everything
   const [expanded, setExpanded] = useState<Set<string>>(new Set());

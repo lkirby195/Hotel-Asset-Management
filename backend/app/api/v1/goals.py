@@ -71,6 +71,8 @@ async def update_goal(
     existing = await goal_service.get_by_id(db, goal_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Goal not found")
+    if existing.property_id != property_id:
+        raise HTTPException(status_code=403, detail="Goal does not belong to this property")
     if existing.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only edit your own goals")
 
@@ -95,6 +97,8 @@ async def delete_goal(
     existing = await goal_service.get_by_id(db, goal_id)
     if not existing:
         raise HTTPException(status_code=404, detail="Goal not found")
+    if existing.property_id != property_id:
+        raise HTTPException(status_code=403, detail="Goal does not belong to this property")
     if existing.user_id != current_user.id:
         raise HTTPException(status_code=403, detail="You can only delete your own goals")
 

@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("target_value", sa.BigInteger, nullable=False),
         sa.Column("period_type", sa.String(20), nullable=False),
         sa.Column("year", sa.Integer, nullable=False),
-        sa.Column("month", sa.SmallInteger, nullable=True),
+        sa.Column("month", sa.SmallInteger, nullable=False, server_default="0"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()")),
         sa.UniqueConstraint(

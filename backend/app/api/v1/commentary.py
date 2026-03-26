@@ -86,11 +86,17 @@ async def update_commentary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    existing = await commentary_service.get_by_id(db, comment_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if existing.property_id != property_id:
+        raise HTTPException(status_code=403, detail="Comment does not belong to this property")
+
     updated = await commentary_service.update(db, comment_id, current_user.id, body.text)
     if not updated:
         raise HTTPException(
-            status_code=404,
-            detail="Comment not found or you are not the author",
+            status_code=403,
+            detail="You are not the author of this comment",
         )
     return APIResponse(data=_to_response(updated))
 
@@ -105,10 +111,16 @@ async def delete_commentary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db_session),
 ):
+    existing = await commentary_service.get_by_id(db, comment_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    if existing.property_id != property_id:
+        raise HTTPException(status_code=403, detail="Comment does not belong to this property")
+
     deleted = await commentary_service.delete(db, comment_id, current_user.id)
     if not deleted:
         raise HTTPException(
-            status_code=404,
-            detail="Comment not found or you are not the author",
+            status_code=403,
+            detail="You are not the author of this comment",
         )
     return APIResponse(data={"deleted": True})
