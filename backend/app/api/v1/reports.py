@@ -206,8 +206,9 @@ async def pl_kpis(
     gop_budget = gop_line.budget if gop_line else 0
     noi_actual = noi_line.actual if noi_line else 0
     noi_budget = noi_line.budget if noi_line else 0
-    ebitda_actual = ebitda_line.actual if ebitda_line else 0
-    ebitda_budget = ebitda_line.budget if ebitda_line else 0
+    # EBITDA: use explicit line if present, otherwise fall back to NOI
+    ebitda_actual = ebitda_line.actual if ebitda_line else noi_actual
+    ebitda_budget = ebitda_line.budget if ebitda_line else noi_budget
 
     gop_margin = (gop_actual / total_revenue_actual) if total_revenue_actual else 0.0
     gop_margin_budget = (gop_budget / total_revenue_budget) if total_revenue_budget else 0.0

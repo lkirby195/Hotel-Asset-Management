@@ -9,6 +9,8 @@ from app.models.forecast import Forecast
 from app.models.forecast_lock import ForecastLock
 from app.models.month_close import MonthCloseStatus
 from app.models.user import User, user_properties
+from app.models.goal import Goal
+from app.models.commentary import Commentary
 
 __all__ = [
     "Tenant",
@@ -24,4 +26,6 @@ __all__ = [
     "MonthCloseStatus",
     "User",
     "user_properties",
+    "Goal",
+    "Commentary",
 ]

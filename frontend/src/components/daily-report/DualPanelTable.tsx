@@ -9,10 +9,13 @@ function fmtValue(val: number | null, unit: string): string {
   if (val == null) return "—";
   switch (unit) {
     case "currency": {
-      const abs = Math.abs(val);
-      if (abs >= 1_000_000) return `${val < 0 ? "-" : ""}$${(abs / 1_000_000).toFixed(2)}M`;
-      if (abs >= 1_000) return `${val < 0 ? "-" : ""}$${Math.round(abs).toLocaleString()}`;
-      return `${val < 0 ? "-" : ""}$${abs.toFixed(0)}`;
+      // Values from backend are in cents
+      const dollars = val / 100;
+      const abs = Math.abs(dollars);
+      const neg = dollars < 0;
+      if (abs >= 1_000_000) return `${neg ? "-" : ""}$${(abs / 1_000_000).toFixed(2)}M`;
+      if (abs >= 1_000) return `${neg ? "-" : ""}$${Math.round(abs).toLocaleString()}`;
+      return `${neg ? "-" : ""}$${abs.toFixed(0)}`;
     }
     case "percent":
       return `${val.toFixed(1)}%`;
@@ -27,22 +30,32 @@ function fmtValue(val: number | null, unit: string): string {
 
 function fmtVariance(val: number | null, unit: string): string {
   if (val == null) return "—";
-  const sign = val > 0 ? "+" : "";
   switch (unit) {
     case "currency": {
-      const abs = Math.abs(val);
-      if (abs >= 1_000_000) return `${sign}$${(val / 1_000_000).toFixed(2)}M`;
-      if (abs >= 1_000) return `${sign}$${Math.round(val).toLocaleString()}`;
-      return `${sign}$${val.toFixed(0)}`;
+      // Values from backend are in cents
+      const dollars = val / 100;
+      const abs = Math.abs(dollars);
+      const sign = dollars > 0 ? "+" : "";
+      if (abs >= 1_000_000) return `${sign}$${(dollars / 1_000_000).toFixed(2)}M`;
+      if (abs >= 1_000) return `${sign}$${Math.round(dollars).toLocaleString()}`;
+      return `${sign}$${dollars.toFixed(0)}`;
     }
-    case "percent":
+    case "percent": {
+      const sign = val > 0 ? "+" : "";
       return `${sign}${val.toFixed(1)}%`;
-    case "pts":
+    }
+    case "pts": {
+      const sign = val > 0 ? "+" : "";
       return `${sign}${val.toFixed(1)}pt`;
-    case "number":
+    }
+    case "number": {
+      const sign = val > 0 ? "+" : "";
       return `${sign}${Math.round(val).toLocaleString()}`;
-    default:
+    }
+    default: {
+      const sign = val > 0 ? "+" : "";
       return `${sign}${val}`;
+    }
   }
 }
 

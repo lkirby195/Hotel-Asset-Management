@@ -42,30 +42,47 @@ class DailyReportService:
         # Fetch line items with config for report layout
         line_items = await self._fetch_line_items_with_config(db)
 
-        # Build all 4 tabs
+        # Build all 4 tabs — map to actual department_type values in line_items
         tabs: dict[str, list[str]] = {
             "Room Performance": ["rooms"],
-            "Ancillary Revenue": ["food_and_beverage", "other_revenue"],
-            "Labor": ["labor"],
-            "STR Competitive": ["str_competitive"],
+            "Ancillary Revenue": ["fb", "spa", "golf", "mountain", "retail"],
+            "Labor": [],          # special: labor rows extracted across departments
+            "STR Competitive": [],  # placeholder — no seeded data yet
         }
+
+        # Identify labor line items (codes ending in _labor)
+        labor_items = [li for li in line_items if li["code"].endswith("_labor")]
 
         sections: dict[str, list[DailyReportSection]] = {}
         for tab_name, dept_types in tabs.items():
             tab_sections: list[DailyReportSection] = []
-            for dept_type in dept_types:
-                items = [li for li in line_items if li["department_type"] == dept_type]
-                if not items:
-                    continue
-                rows = self._build_rows(
-                    items, daily, daily_forecast, daily_stly,
-                    mtd_actual, mtd_budget, mtd_stly, mtd_fcst_lock,
-                    available_rooms,
-                )
-                tab_sections.append(DailyReportSection(
-                    section_name=dept_type,
-                    rows=rows,
-                ))
+
+            if tab_name == "Labor":
+                # Build labor tab from labor line items across all departments
+                if labor_items:
+                    rows = self._build_rows(
+                        labor_items, daily, daily_forecast, daily_stly,
+                        mtd_actual, mtd_budget, mtd_stly, mtd_fcst_lock,
+                        available_rooms,
+                    )
+                    tab_sections.append(DailyReportSection(
+                        section_name="Labor",
+                        rows=rows,
+                    ))
+            else:
+                for dept_type in dept_types:
+                    items = [li for li in line_items if li["department_type"] == dept_type]
+                    if not items:
+                        continue
+                    rows = self._build_rows(
+                        items, daily, daily_forecast, daily_stly,
+                        mtd_actual, mtd_budget, mtd_stly, mtd_fcst_lock,
+                        available_rooms,
+                    )
+                    tab_sections.append(DailyReportSection(
+                        section_name=dept_type,
+                        rows=rows,
+                    ))
             sections[tab_name] = tab_sections
 
         return DailyReportResponse(
@@ -308,8 +325,16 @@ class DailyReportService:
                 ORDER BY li.sort_order
             """),
         )
-        return [
-            {
+        items = []
+        for row in result.fetchall():
+            # Stat items (rooms_sold, covers, etc.) should display as numbers, not currency
+            display_format = row.display_format
+            if row.data_type == "stat":
+                display_format = "number"
+            # KPI percentage items
+            if row.code in ("occupancy_pct", "gop_margin", "labor_cost_pct"):
+                display_format = "percent"
+            items.append({
                 "id": row.id,
                 "code": row.code,
                 "name": row.name,
@@ -317,7 +342,6 @@ class DailyReportService:
                 "sort_order": row.sort_order,
                 "is_summary": row.is_summary,
                 "data_type": row.data_type,
-                "display_format": row.display_format,
-            }
-            for row in result.fetchall()
-        ]
+                "display_format": display_format,
+            })
+        return items

@@ -843,6 +843,49 @@ def seed(db_url: str) -> None:
                 })
         print("    10 month-close records created (5 properties × 2 months).")
 
+        # --- Goals ---
+        print("[8/8] Creating demo annual goals (3 per property)...")
+        goal_count = 0
+        for prop in PROPERTY_DEFS:
+            tier = TIER_CONFIG[prop["tier"]]
+            rooms = prop["rooms"]
+            # Estimate annual targets based on tier
+            avg_occ = tier["occ_base"]
+            avg_adr = tier["base_adr"]
+            annual_room_nights = rooms * 365
+            annual_rooms_sold = int(annual_room_nights * avg_occ)
+            annual_room_rev = annual_rooms_sold * avg_adr
+            annual_revpar = int(annual_room_rev / annual_room_nights)
+
+            # Total revenue ~ room_rev * 1.8 (ancillary)
+            annual_total_rev = int(annual_room_rev * 1.8)
+            # EBITDA ~ 22-28% of total revenue
+            ebitda_margin = RNG.uniform(0.22, 0.28)
+            annual_ebitda = int(annual_total_rev * ebitda_margin)
+
+            goal_defs = [
+                ("revpar", annual_revpar),          # cents — annual RevPAR target
+                ("occupancy", int(avg_occ * 10000)), # basis points — e.g. 7200 = 72.00%
+                ("ebitda", annual_ebitda),            # cents — annual EBITDA target
+            ]
+            for metric_code, target_value in goal_defs:
+                goal_id = str(uuid.uuid5(TENANT_ID, f"goal-{prop['id']}-{metric_code}"))
+                conn.execute(text("""
+                    INSERT INTO goals (id, tenant_id, property_id, user_id, metric_code,
+                                       target_value, period_type, year, month)
+                    VALUES (:id, :tid, :pid, :uid, :metric, :target, 'annual', 2026, NULL)
+                """), {
+                    "id": goal_id,
+                    "tid": str(TENANT_ID),
+                    "pid": str(prop["id"]),
+                    "uid": str(ADMIN_USER_ID),
+                    "metric": metric_code,
+                    "target": target_value,
+                })
+                goal_count += 1
+
+        print(f"    {goal_count} goal records created (3 per property × 5 properties).")
+
     engine.dispose()
     print("\nSeed complete!")
 
