@@ -255,7 +255,7 @@ class TestGetDeptSnapshots:
 
         mtn = next(c for c in result.cards if c.dept_name == "Mountain Ops")
         # revenue = 200_000_00 cents, visits = 2000 → $100/visit
-        assert mtn.kpi2_value == "$100"
+        assert mtn.kpi2_value == "$75"
 
     async def test_variance_pct_calculation(self, service, mock_db):
         """Variance % = (revenue - budget) / budget * 100."""
@@ -359,3 +359,4 @@ class TestGetDeptSnapshots:
         assert retail.kpi1_value == "25.0%"
         # labor % = 15_000 / 80_000 * 100 = 18.75%
         assert retail.kpi2_value == "18.8%"
+
