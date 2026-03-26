@@ -22,16 +22,16 @@ import type { ApiResponse } from "@/types/api";
 
 const METRIC_DEFS: Record<
   string,
-  { label: string; format: "currency" | "percentage"; inverse: boolean }
+  { label: string; format: "currency" | "percentage"; inverse: boolean; cumulative: boolean }
 > = {
-  revpar: { label: "RevPAR", format: "currency", inverse: false },
-  occupancy: { label: "Occupancy", format: "percentage", inverse: false },
-  adr: { label: "ADR", format: "currency", inverse: false },
-  total_revenue: { label: "Total Revenue", format: "currency", inverse: false },
-  gop: { label: "GOP", format: "currency", inverse: false },
-  ebitda: { label: "EBITDA", format: "currency", inverse: false },
-  labor_pct: { label: "Labor %", format: "percentage", inverse: true },
-  food_cost_pct: { label: "Food Cost %", format: "percentage", inverse: true },
+  revpar: { label: "RevPAR", format: "currency", inverse: false, cumulative: false },
+  occupancy: { label: "Occupancy", format: "percentage", inverse: false, cumulative: false },
+  adr: { label: "ADR", format: "currency", inverse: false, cumulative: false },
+  total_revenue: { label: "Total Revenue", format: "currency", inverse: false, cumulative: true },
+  gop: { label: "GOP", format: "currency", inverse: false, cumulative: true },
+  ebitda: { label: "EBITDA", format: "currency", inverse: false, cumulative: true },
+  labor_pct: { label: "Labor %", format: "percentage", inverse: true, cumulative: false },
+  food_cost_pct: { label: "Food Cost %", format: "percentage", inverse: true, cumulative: false },
 };
 
 const AVAILABLE_METRICS = Object.entries(METRIC_DEFS).map(([code, def]) => ({
@@ -73,6 +73,10 @@ interface PLKPIData {
   total_revenue: number;
   gop: number;
   ebitda: number;
+  // TODO: add labor_pct and food_cost_pct to the pl-kpis endpoint response
+  total_labor?: number;
+  fb_cost_of_sales?: number;
+  fb_revenue?: number;
 }
 
 function getActualForMetric(
@@ -93,6 +97,18 @@ function getActualForMetric(
       return kpi.gop;
     case "ebitda":
       return kpi.ebitda;
+    case "labor_pct":
+      // Compute from total_labor / total_revenue if available
+      if (kpi.total_labor != null && kpi.total_revenue > 0) {
+        return Math.round((kpi.total_labor / kpi.total_revenue) * 10000);
+      }
+      return null;
+    case "food_cost_pct":
+      // Compute from fb_cost_of_sales / fb_revenue if available
+      if (kpi.fb_cost_of_sales != null && kpi.fb_revenue != null && kpi.fb_revenue > 0) {
+        return Math.round((kpi.fb_cost_of_sales / kpi.fb_revenue) * 10000);
+      }
+      return null;
     default:
       return null;
   }
@@ -435,17 +451,44 @@ export default function GoalsPage() {
     if (!effectiveSelected) return [];
     const goal = annualGoals.find((g) => g.metric_code === effectiveSelected);
     if (!goal) return [];
-    const monthlyTarget = Math.round(goal.target_value / 12);
+    const def = METRIC_DEFS[goal.metric_code];
+    // Rate metrics (occupancy, ADR, RevPAR, labor %, food cost %) keep the same
+    // target each month. Only cumulative metrics (revenue, GOP, EBITDA) divide by 12.
+    const monthlyTarget = def?.cumulative
+      ? Math.round(goal.target_value / 12)
+      : goal.target_value;
 
-    let ytdActual = 0;
-    let ytdTarget = 0;
+    const isCumulative = def?.cumulative ?? true;
+    let ytdActualSum = 0;
+    let ytdActualCount = 0;
+    let ytdTargetSum = 0;
+    let ytdTargetCount = 0;
 
     return Array.from({ length: 12 }, (_, i) => {
       const month = i + 1;
       const kpi = monthlyKpis?.[month];
       const actual = getActualForMetric(kpi, goal.metric_code);
-      ytdTarget += monthlyTarget;
-      if (actual != null) ytdActual += actual;
+
+      if (isCumulative) {
+        ytdTargetSum += monthlyTarget;
+        if (actual != null) ytdActualSum += actual;
+      } else {
+        // Rate metrics: YTD is the average across months with data
+        ytdTargetCount++;
+        if (actual != null) {
+          ytdActualSum += actual;
+          ytdActualCount++;
+        }
+      }
+
+      const ytdActual = isCumulative
+        ? ytdActualSum
+        : ytdActualCount > 0
+          ? Math.round(ytdActualSum / ytdActualCount)
+          : 0;
+      const ytdTarget = isCumulative
+        ? ytdTargetSum
+        : monthlyTarget; // For rate metrics, YTD target = the target itself
 
       return {
         month,
@@ -550,15 +593,18 @@ export default function GoalsPage() {
               const inverse = def?.inverse ?? false;
               const actual = getActualForMetric(kpiData, goal.metric_code);
 
-              // YTD target = annual target * (% of year elapsed)
-              const ytdTarget = Math.round(
-                goal.target_value * (yearElapsedPct / 100),
-              );
+              // For cumulative metrics, YTD target is pro-rated by time elapsed.
+              // For rate metrics, YTD target equals the annual target.
+              const isCumulative = def?.cumulative ?? true;
+              const ytdTarget = isCumulative
+                ? Math.round(goal.target_value * (yearElapsedPct / 100))
+                : goal.target_value;
               const variance =
                 actual != null ? actual - ytdTarget : null;
+              // % of YTD target achieved (consistent with pace badge)
               const pct =
-                actual != null && goal.target_value > 0
-                  ? (actual / goal.target_value) * 100
+                actual != null && ytdTarget > 0
+                  ? (actual / ytdTarget) * 100
                   : 0;
               const pace =
                 actual != null
@@ -566,10 +612,13 @@ export default function GoalsPage() {
                   : ("ON TRACK" as PaceStatus);
               const colors = paceColors(pace);
 
-              // Projected annual = (actual / ytdElapsed) * 100
+              // Projected annual: for cumulative, extrapolate from elapsed time.
+              // For rate metrics, current YTD average IS the projection.
               const projectedAnnual =
-                actual != null && yearElapsedPct > 0
-                  ? Math.round((actual / yearElapsedPct) * 100)
+                actual != null
+                  ? isCumulative && yearElapsedPct > 0
+                    ? Math.round((actual / yearElapsedPct) * 100)
+                    : actual
                   : null;
 
               const isSelected = effectiveSelected === goal.metric_code;
@@ -688,15 +737,35 @@ export default function GoalsPage() {
             const inverse = def?.inverse ?? false;
 
             // Compute YTD totals for the footer
-            const ytdActualTotal = monthlyBreakdown.reduce(
-              (sum, m) => sum + (m.actual ?? 0),
-              0,
-            );
-            const ytdTargetTotal = monthlyBreakdown.reduce(
-              (sum, m) =>
-                m.month <= currentMonth ? sum + m.monthlyTarget : sum,
-              0,
-            );
+            const isCumulative = def?.cumulative ?? true;
+            let ytdActualTotal: number;
+            let ytdTargetTotal: number;
+
+            if (isCumulative) {
+              ytdActualTotal = monthlyBreakdown.reduce(
+                (sum, m) => sum + (m.actual ?? 0),
+                0,
+              );
+              ytdTargetTotal = monthlyBreakdown.reduce(
+                (sum, m) =>
+                  m.month <= currentMonth ? sum + m.monthlyTarget : sum,
+                0,
+              );
+            } else {
+              // Rate metrics: use average of months with data
+              const monthsWithData = monthlyBreakdown.filter(
+                (m) => m.actual != null && m.month <= currentMonth,
+              );
+              ytdActualTotal =
+                monthsWithData.length > 0
+                  ? Math.round(
+                      monthsWithData.reduce((sum, m) => sum + (m.actual ?? 0), 0) /
+                        monthsWithData.length,
+                    )
+                  : 0;
+              ytdTargetTotal = goal.target_value; // Rate target is the same all year
+            }
+
             const overallPace = getPaceStatus(
               ytdActualTotal,
               ytdTargetTotal,
@@ -704,10 +773,13 @@ export default function GoalsPage() {
             );
             const overallColors = paceColors(overallPace);
 
-            // Projected annual
-            const projectedAnnual =
-              yearElapsedPct > 0
+            // Projected annual (for rate metrics, projected = current average)
+            const projectedAnnual = isCumulative
+              ? yearElapsedPct > 0
                 ? Math.round((ytdActualTotal / yearElapsedPct) * 100)
+                : null
+              : ytdActualTotal > 0
+                ? ytdActualTotal
                 : null;
 
             return (
@@ -893,18 +965,21 @@ export default function GoalsPage() {
                         {fmtValue(ytdTargetTotal, format)}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <span
-                          className="inline-flex px-1.5 py-0.5 rounded text-[10px]"
-                          style={{
-                            color: "#a7f3d0",
-                            background: "rgba(255,255,255,0.1)",
-                          }}
-                        >
-                          {fmtVariance(
-                            ytdActualTotal - ytdTargetTotal,
-                            format,
-                          )}
-                        </span>
+                        {(() => {
+                          const ytdVar = ytdActualTotal - ytdTargetTotal;
+                          const isFavorable = inverse ? ytdVar <= 0 : ytdVar >= 0;
+                          return (
+                            <span
+                              className="inline-flex px-1.5 py-0.5 rounded text-[10px]"
+                              style={{
+                                color: isFavorable ? "#a7f3d0" : "#fecaca",
+                                background: "rgba(255,255,255,0.1)",
+                              }}
+                            >
+                              {fmtVariance(ytdVar, format)}
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-3 px-4 text-right">
                         <span
