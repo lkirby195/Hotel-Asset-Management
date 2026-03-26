@@ -549,7 +549,6 @@ async def dept_detail(
         kpis = [
             DeptKPI(label="Total F&B Revenue", actual=round(rev), budget=round(bgt_rev), variance=round(rev - bgt_rev), unit="currency"),
             DeptKPI(label="Food Cost %", actual=round(food_pct, 4), budget=round(bgt_food_pct, 4), variance=round(food_pct - bgt_food_pct, 4), unit="percentage"),
-            DeptKPI(label="Bev Cost %", actual=round(food_pct, 4), budget=round(bgt_food_pct, 4), variance=round(food_pct - bgt_food_pct, 4), unit="percentage"),
             DeptKPI(label="Labor %", actual=round(labor_pct, 4), budget=round(bgt_labor_pct, 4), variance=round(labor_pct - bgt_labor_pct, 4), unit="percentage"),
             DeptKPI(label="Covers", actual=covers, budget=bgt_covers, variance=covers - bgt_covers, unit="integer"),
             DeptKPI(label="Avg Check", actual=round(avg_check), budget=round(bgt_avg_check), variance=round(avg_check - bgt_avg_check), unit="currency"),
