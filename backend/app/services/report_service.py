@@ -768,12 +768,21 @@ class ReportService:
         # 700: EBITDA (calculated)
         lines.append(virt("ebitda", "EBITDA", 700))
 
+        # 710: FF&E / Capital Reserve (child of EBITDA)
+        if line := mk("capital_reserve", 710, depth=1, clear_parent=True):
+            lines.append(line)
+
         # 800: NOI (stored in net_operating_income)
         if line := mk("net_operating_income", 800):
             lines.append(line)
 
+        # 810-840: Below NOI items
+        for code, sort in [("owner_expense", 810), ("other_expenses_below_noi", 820), ("writeoffs", 830), ("depreciation_expense", 840)]:
+            if line := mk(code, sort, depth=1, clear_parent=True):
+                lines.append(line)
+
         # 900: Net Income (calculated)
-        lines.append(virt("net_income", "Net Income", 900))
+        lines.append(virt("net_income", "Net Income / (Loss)", 900))
 
         return lines
 
