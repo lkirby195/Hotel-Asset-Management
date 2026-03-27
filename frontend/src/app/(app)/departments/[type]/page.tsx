@@ -139,7 +139,7 @@ export default function DepartmentPage({
   const api = createApiClient(getToken);
   const property = properties.find((p) => p.id === selectedPropertyId);
 
-  const { data, isLoading } = useQuery<DeptDetailResponse>({
+  const { data, isLoading, error } = useQuery<DeptDetailResponse>({
     queryKey: ["dept-detail", selectedPropertyId, deptType],
     queryFn: async () => {
       const resp = await api.get<ApiResponse<DeptDetailResponse>>(
@@ -148,7 +148,13 @@ export default function DepartmentPage({
       return resp.data.data;
     },
     enabled: !!selectedPropertyId,
+    retry: false,
   });
+
+  // Debug: log errors
+  if (error) {
+    console.error("Dept detail fetch error:", error);
+  }
 
   if (!selectedPropertyId) {
     return (
@@ -163,6 +169,16 @@ export default function DepartmentPage({
   const kpis = data?.kpis ?? [];
   const plLines = data?.pl_lines ?? [];
   const deptName = data?.dept_name ?? deptType;
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="rounded-xl border border-negative-500/20 bg-negative-50 p-8 text-center text-sm text-negative-700">
+          Failed to load department data: {String(error)}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
