@@ -133,45 +133,29 @@ function fmtMargin(cents: number, totalCents: number): string {
    Row classification
    ═══════════════════════════════════════════════════ */
 
-type RowStyle = "l0" | "l1" | "l2" | "total" | "subtotal" | "waterfall" | "perf-header" | "net-income";
+type RowStyle = "l0" | "l1" | "l2" | "total" | "subtotal";
 
-/** Codes for the USALI waterfall calculated rows (dark blue bg) */
-const WATERFALL_CODES = new Set([
-  "total_dept_profit",
-  "total_gop",
-  "operating_income",
+const TOTAL_KW = [
+  "total revenue",
+  "gross operating profit",
+  "net operating income",
   "ebitda",
-  "net_operating_income",
-]);
-
-/** Codes that cannot be expanded (calculated totals, performance header, bottom line) */
-const NON_EXPANDABLE = new Set([
-  "performance",
-  "total_dept_profit",
-  "total_gop",
-  "operating_income",
-  "ebitda",
-  "net_operating_income",
-  "net_income",
-]);
-
-/** Top-level section headers that use standard l0 styling */
-const SECTION_HEADERS = new Set([
-  "total_revenue",
-  "total_dept_expenses",
-]);
+];
+const SUB_KW = [
+  "dept profit",
+  "department profit",
+  "total undistributed",
+  "total non-operating",
+  "total other operated",
+  "total fixed",
+];
 
 function classify(item: PLLineItem): RowStyle {
-  const code = item.code?.toLowerCase() ?? "";
-  if (code === "performance") return "perf-header";
-  if (code === "net_income") return "net-income";
-  if (WATERFALL_CODES.has(code)) return "waterfall";
-  if (SECTION_HEADERS.has(code)) return "total";
-  // Between-waterfall items at depth 0 that are expandable summaries
-  if (item.depth === 0 && item.is_summary && !NON_EXPANDABLE.has(code)) return "l1";
-  // Between-waterfall leaf items at depth 0 (management_fee, insurance, etc.)
-  if (item.depth === 0 && !item.is_summary) return "l1";
-  // Children of expandable sections
+  const lc = item.name.toLowerCase();
+  if (TOTAL_KW.some((k) => lc.includes(k))) return "total";
+  if (SUB_KW.some((k) => lc.includes(k))) return "subtotal";
+  if (lc.includes("capital reserve")) return "l1";
+  if (item.depth === 0 && item.is_summary) return "l0";
   if (item.depth <= 1 && item.is_summary) return "l1";
   return "l2";
 }
@@ -196,20 +180,12 @@ function badgeCls(val: number, dt: string): string {
    Visibility
    ═══════════════════════════════════════════════════ */
 
-/** IDs of "always-open" parents whose children show without expansion */
-function findAlwaysOpen(lines: PLLineItem[]): Set<string> {
-  const s = new Set<string>();
-  for (const l of lines) if (l.code === "performance") s.add(l.id);
-  return s;
-}
-
 function visibleSet(
   lines: PLLineItem[],
   expanded: Set<string>,
 ): Set<string> {
   const parentOf = new Map<string, string | null>();
   for (const l of lines) parentOf.set(l.id, l.parent_id);
-  const alwaysOpen = findAlwaysOpen(lines);
 
   const cache = new Map<string, boolean>();
   function ok(id: string): boolean {
@@ -219,7 +195,7 @@ function visibleSet(
       cache.set(id, true);
       return true;
     }
-    const vis = (expanded.has(pid) || alwaysOpen.has(pid)) && ok(pid);
+    const vis = expanded.has(pid) && ok(pid);
     cache.set(id, vis);
     return vis;
   }
@@ -311,10 +287,9 @@ interface FlowFlex {
 
 function calcFlowFlex(lines: PLLineItem[]): FlowFlex | null {
   const find = (p: string) => lines.find((l) => l.name.toLowerCase().includes(p));
-  const findCode = (c: string) => lines.find((l) => l.code === c);
   const tr = find("total revenue");
-  const gop = findCode("total_gop") ?? find("gross operating profit");
-  const eb = findCode("ebitda") ?? find("ebitda");
+  const gop = find("gross operating profit");
+  const eb = find("ebitda");
   if (!tr || !gop || !eb) return null;
 
   const rv = tr.variance_dollars;
@@ -656,7 +631,7 @@ export default function PLPage() {
                     item={l}
                     totalRev={totalRev}
                     isExpanded={expanded.has(l.id)}
-                    canExpand={l.is_summary && view === "detail" && !NON_EXPANDABLE.has(l.code)}
+                    canExpand={l.is_summary && view === "detail" && !["total_gop", "gop", "gross_operating_profit", "noi", "net_operating_income", "ebitda"].includes(l.code)}
                     isLoadingChildren={loadingChildren.has(l.id)}
                     onToggle={() => toggle(l.id)}
                   />
@@ -702,17 +677,18 @@ function PLRow({
   onToggle: () => void;
 }) {
   const s = classify(item);
-  const isWaterfall = s === "waterfall" || s === "net-income";
-  const isPerfHeader = s === "perf-header";
-  const isBetweenWaterfall = item.depth === 0 && !item.is_summary && !isPerfHeader;
-  const indent = isBetweenWaterfall ? 48 : item.depth * 24 + 16;
+  const isEbitda = item.name.toLowerCase().includes("ebitda");
+  const lc = item.code?.toLowerCase() ?? "";
+  const isWaterfall = ["total_gop", "gop", "gross_operating_profit", "noi", "net_operating_income"].includes(lc);
+  const isGopChild = ["total_undist_expenses", "total_fixed_charges"].includes(lc);
+  const indent = isGopChild ? 48 : item.depth * 24 + 16;
   const fcstVar =
     item.forecast_lock != null ? item.actual - item.forecast_lock : null;
 
-  // Performance header shows no numbers
-  const showNums = !isPerfHeader;
+  // L0 rows show no numbers (just the header bar)
+  const showNums = true; // All rows show numbers, including L0 headers
 
-  // Total/waterfall rows use light colored text for favorable
+  // Total rows use light colored text for favorable
   const isTotalRow = s === "total";
   const showTotalStyle = isTotalRow || isWaterfall;
   const totalVarStyle = (v: number) =>
@@ -727,19 +703,19 @@ function PLRow({
       className={cn(
         s === "l0" &&
           "bg-surface-800 text-white font-bold cursor-pointer hover:bg-surface-700",
-        s === "l1" && canExpand &&
+        s === "l1" &&
           "bg-surface-100 font-semibold cursor-pointer hover:bg-surface-200",
-        s === "l1" && !canExpand &&
-          "bg-surface-50 font-medium",
         s === "l2" && "hover:bg-surface-50",
-        s === "total" && "bg-surface-900 text-white font-bold",
+        s === "total" && !isEbitda && !isWaterfall && "bg-surface-900 text-white font-bold",
         s === "subtotal" && "bg-surface-200 font-bold",
-        s === "perf-header" && "bg-surface-900 text-white font-bold",
+        isGopChild && "bg-surface-100 font-semibold cursor-pointer hover:bg-surface-200",
       )}
       style={
         isWaterfall
           ? { background: "#1e3a5f", color: "#fff", fontWeight: 700 }
-          : undefined
+          : isEbitda && s === "total"
+            ? { background: "#0c4a6e", color: "#fff", fontWeight: 700 }
+            : undefined
       }
       onClick={canExpand ? onToggle : undefined}
     >

@@ -93,25 +93,15 @@ DEPARTMENT_TYPES = [
 # (code, name, parent_code, dept_type, sort_order, is_summary, data_type)
 # ---------------------------------------------------------------------------
 LINE_ITEMS = [
-    # ── Performance Section (black bar header, no accordion) ──
-    ("performance", "Performance", None, None, 50, True, "stat"),
-    ("available_rooms", "Rooms Available", "performance", "rooms", 51, False, "stat"),
-    ("rooms_sold", "Rooms Sold", "performance", "rooms", 52, False, "stat"),
-    ("occupied_rooms", "Occupied Rooms", "performance", "rooms", 53, False, "stat"),
-    ("rooms_out_of_order", "Rooms Out of Order", "performance", "rooms", 54, False, "stat"),
-    ("comp_rooms", "Comp Rooms", "performance", "rooms", 55, False, "stat"),
-    ("occupancy_pct", "Occupancy %", "performance", "rooms", 56, False, "stat"),
-    ("adr", "ADR", "performance", "rooms", 57, False, "revenue"),
-    ("revpar", "RevPAR", "performance", "rooms", 58, False, "revenue"),
-    ("trevpar", "TRevPAR", "performance", "rooms", 59, False, "revenue"),
-    # Additional departmental stats (under performance, not in main waterfall)
-    ("covers", "Covers", "performance", "fb", 60, False, "stat"),
-    ("golf_rounds", "Golf Rounds", "performance", "golf", 61, False, "stat"),
-    ("mountain_skier_visits", "Skier Visits", "performance", "mountain", 62, False, "stat"),
-    ("spa_treatments", "Spa Treatments", "performance", "spa", 63, False, "stat"),
-
-    # ── Total Revenue (expandable) ──
+    # Top-level summaries
     ("total_revenue", "Total Revenue", None, None, 100, True, "revenue"),
+    ("total_dept_expenses", "Total Departmental Expenses", None, None, 200, True, "expense"),
+    ("total_gop", "Gross Operating Profit", None, None, 300, True, "revenue"),
+    ("total_undist_expenses", "Total Undistributed Expenses", None, None, 400, True, "expense"),
+    ("total_fixed_charges", "Total Fixed Charges", None, None, 500, True, "expense"),
+    ("net_operating_income", "Net Operating Income", None, None, 600, True, "revenue"),
+
+    # --- Revenue breakdown ---
     ("rooms_revenue", "Rooms Revenue", "total_revenue", "rooms", 110, True, "revenue"),
     ("room_revenue", "Room Revenue", "rooms_revenue", "rooms", 111, False, "revenue"),
     ("transient_revenue", "Transient Revenue", "room_revenue", "rooms", 1111, False, "revenue"),
@@ -143,8 +133,7 @@ LINE_ITEMS = [
     ("telecom_revenue", "Telecommunications", "other_revenue", None, 154, False, "revenue"),
     ("misc_revenue", "Miscellaneous Revenue", "other_revenue", None, 155, False, "revenue"),
 
-    # ── Total Departmental Expenses (expandable) ──
-    ("total_dept_expenses", "Total Departmental Expenses", None, None, 200, True, "expense"),
+    # --- Departmental Expenses ---
     ("rooms_expense", "Rooms Expense", "total_dept_expenses", "rooms", 210, True, "expense"),
     ("rooms_labor", "Rooms Labor", "rooms_expense", "rooms", 211, False, "expense"),
     ("rooms_ota_commissions", "OTA Commissions", "rooms_expense", "rooms", 212, False, "expense"),
@@ -170,71 +159,53 @@ LINE_ITEMS = [
     ("mountain_labor", "Mountain Labor", "mountain_expense", "mountain", 2451, False, "expense"),
     ("mountain_other_expense", "Mountain Other Expense", "mountain_expense", "mountain", 2452, False, "expense"),
 
-    # ── Total Departmental Profit (calculated: Revenue - Dept Expenses) ──
-    ("total_dept_profit", "Total Departmental Profit", None, None, 250, True, "revenue"),
+    # --- Undistributed Expenses ---
+    ("admin_general", "Administrative & General", "total_undist_expenses", None, 410, True, "expense"),
+    ("ag_salaries", "A&G Salaries", "admin_general", None, 411, False, "expense"),
+    ("ag_professional_fees", "Professional Fees", "admin_general", None, 412, False, "expense"),
+    ("ag_other", "A&G Other", "admin_general", None, 413, False, "expense"),
 
-    # ── Undistributed Operating Expenses (between Dept Profit and GOP) ──
-    ("admin_general", "Admin & General", None, None, 260, True, "expense"),
-    ("ag_salaries", "A&G Salaries", "admin_general", None, 261, False, "expense"),
-    ("ag_professional_fees", "Professional Fees", "admin_general", None, 262, False, "expense"),
-    ("ag_other", "A&G Other", "admin_general", None, 263, False, "expense"),
+    ("sales_marketing", "Sales & Marketing", "total_undist_expenses", None, 420, True, "expense"),
+    ("sm_salaries", "S&M Salaries", "sales_marketing", None, 421, False, "expense"),
+    ("sm_advertising", "Advertising", "sales_marketing", None, 422, False, "expense"),
+    ("sm_other", "S&M Other", "sales_marketing", None, 423, False, "expense"),
 
-    ("info_telecom", "Information & Telecommunication", None, None, 270, False, "expense"),
+    ("pom", "Property Operations & Maintenance", "total_undist_expenses", None, 430, True, "expense"),
+    ("pom_salaries", "POM Salaries", "pom", None, 431, False, "expense"),
+    ("pom_repairs", "Repairs & Maintenance", "pom", None, 432, False, "expense"),
+    ("pom_utilities", "Utilities", "pom", None, 433, False, "expense"),
 
-    ("sales_promotion", "Sales & Promotion", None, None, 280, True, "expense"),
-    ("sm_salaries", "S&M Salaries", "sales_promotion", None, 281, False, "expense"),
-    ("sm_advertising", "Advertising", "sales_promotion", None, 282, False, "expense"),
-    ("sm_other", "S&M Other", "sales_promotion", None, 283, False, "expense"),
+    ("energy", "Energy Costs", "total_undist_expenses", None, 440, True, "expense"),
+    ("energy_electric", "Electricity", "energy", None, 441, False, "expense"),
+    ("energy_gas", "Gas", "energy", None, 442, False, "expense"),
+    ("energy_water", "Water & Sewer", "energy", None, 443, False, "expense"),
 
-    ("repairs_maintenance", "Repairs & Maintenance", None, None, 290, True, "expense"),
-    ("pom_salaries", "R&M Salaries", "repairs_maintenance", None, 291, False, "expense"),
-    ("pom_repairs", "Repairs", "repairs_maintenance", None, 292, False, "expense"),
-    ("pom_utilities", "R&M Other", "repairs_maintenance", None, 293, False, "expense"),
+    # --- Fixed Charges ---
+    ("management_fee", "Management Fee", "total_fixed_charges", None, 510, False, "expense"),
+    ("property_tax", "Property Taxes", "total_fixed_charges", None, 520, False, "expense"),
+    ("insurance", "Insurance", "total_fixed_charges", None, 530, False, "expense"),
+    ("rent_lease", "Rent / Ground Lease", "total_fixed_charges", None, 540, False, "expense"),
 
-    ("utilities_expense", "Utilities", None, None, 295, True, "expense"),
-    ("energy_electric", "Electricity", "utilities_expense", None, 296, False, "expense"),
-    ("energy_gas", "Gas", "utilities_expense", None, 297, False, "expense"),
-    ("energy_water", "Water & Sewer", "utilities_expense", None, 298, False, "expense"),
+    # --- Statistical line items ---
+    ("rooms_sold", "Rooms Sold", None, "rooms", 810, False, "stat"),
+    ("available_rooms", "Available Rooms", None, "rooms", 820, False, "stat"),
+    ("occupied_rooms", "Occupied Rooms", None, "rooms", 830, False, "stat"),
+    ("covers", "Covers", None, "fb", 840, False, "stat"),
+    ("golf_rounds", "Golf Rounds", None, "golf", 850, False, "stat"),
+    ("mountain_skier_visits", "Skier Visits", None, "mountain", 860, False, "stat"),
+    ("spa_treatments", "Spa Treatments", None, "spa", 870, False, "stat"),
 
-    ("laundry", "Laundry", None, None, 299, False, "expense"),
-
-    # ── Gross Operating Profit (calculated: Dept Profit - Undistributed) ──
-    ("total_gop", "Gross Operating Profit", None, None, 300, True, "revenue"),
-
-    # ── Below GOP ──
-    ("management_fee", "Management Fees", None, None, 310, False, "expense"),
-
-    # ── Operating Income (calculated: GOP - Management Fees) ──
-    ("operating_income", "Operating Income", None, None, 350, True, "revenue"),
-
-    # ── Below Operating Income ──
-    ("insurance", "Insurance", None, None, 360, False, "expense"),
-    ("property_tax", "Property & Other Tax", None, None, 370, False, "expense"),
-    ("rent_lease", "Rent", None, None, 380, False, "expense"),
-    ("other_nonop_expense", "Other Non-Operating Expenses", None, None, 390, False, "expense"),
-
-    # ── EBITDA (calculated: Operating Income - Non-Operating) ──
-    ("ebitda", "EBITDA", None, None, 400, True, "revenue"),
-
-    # ── Below EBITDA ──
-    ("capital_reserve", "Capital Reserve", None, None, 410, False, "expense"),
-
-    # ── Net Operating Income (calculated: EBITDA - Capital Reserve) ──
-    ("net_operating_income", "Net Operating Income", None, None, 450, True, "revenue"),
-
-    # ── Below NOI ──
-    ("owner_expense", "Owner Expense", None, None, 460, False, "expense"),
-    ("other_expenses", "Other Expenses", None, None, 470, False, "expense"),
-    ("writeoffs", "Writeoffs", None, None, 480, False, "expense"),
-    ("depreciation", "Depreciation", None, None, 490, False, "expense"),
-
-    # ── Net Income / (Loss) (calculated: NOI - Below-NOI items) ──
-    ("net_income", "Net Income / (Loss)", None, None, 500, True, "revenue"),
+    # --- KPI metrics ---
+    ("revpar", "RevPAR", None, "rooms", 700, False, "revenue"),
+    ("adr", "ADR", None, "rooms", 710, False, "revenue"),
+    ("occupancy_pct", "Occupancy %", None, "rooms", 720, False, "revenue"),
+    ("gop_margin", "GOP Margin %", None, None, 730, False, "revenue"),
+    ("labor_cost_pct", "Labor Cost %", None, None, 740, False, "expense"),
 ]
 
 # Line item codes that get daily actuals (non-summary, non-KPI)
 DAILY_LINE_ITEM_CODES = [li[0] for li in LINE_ITEMS if not li[5] and li[6] != "stat" and li[0] not in (
-    "revpar", "adr", "occupancy_pct", "trevpar",
+    "revpar", "adr", "occupancy_pct", "gop_margin", "labor_cost_pct",
 )]
 
 STAT_LINE_ITEM_CODES = [li[0] for li in LINE_ITEMS if li[6] == "stat"]
@@ -303,7 +274,6 @@ TIER_CONFIG = {
 
 # Expense ratios as fraction of room_revenue for the property
 EXPENSE_RATIOS = {
-    # Departmental expenses (of room revenue unless noted)
     "rooms_labor": 0.18,
     "rooms_ota_commissions": 0.06,
     "rooms_supplies": 0.02,
@@ -319,11 +289,9 @@ EXPENSE_RATIOS = {
     "golf_other_expense": 0.05,     # of golf revenue
     "mountain_labor": 0.30,         # of mountain revenue
     "mountain_other_expense": 0.10, # of mountain revenue
-    # Undistributed operating expenses (of total revenue)
-    "ag_salaries": 0.04,
+    "ag_salaries": 0.04,            # of total revenue
     "ag_professional_fees": 0.01,
     "ag_other": 0.005,
-    "info_telecom": 0.01,
     "sm_salaries": 0.025,
     "sm_advertising": 0.015,
     "sm_other": 0.005,
@@ -333,21 +301,10 @@ EXPENSE_RATIOS = {
     "energy_electric": 0.025,
     "energy_gas": 0.01,
     "energy_water": 0.008,
-    "laundry": 0.015,
-    # Below GOP
     "management_fee": 0.03,
-    # Below Operating Income
-    "insurance": 0.012,
     "property_tax": 0.025,
+    "insurance": 0.012,
     "rent_lease": 0.04,
-    "other_nonop_expense": 0.005,
-    # Below EBITDA
-    "capital_reserve": 0.03,
-    # Below NOI
-    "owner_expense": 0.01,
-    "other_expenses": 0.005,
-    "writeoffs": 0.002,
-    "depreciation": 0.04,
 }
 
 
@@ -467,11 +424,9 @@ def generate_daily_actuals(prop: dict, line_item_ids: dict) -> list[dict]:
             "golf_other_expense": _jitter(int(golf_rev * EXPENSE_RATIOS["golf_other_expense"])) if golf_rev else 0,
             "mountain_labor": _jitter(int(mtn_rev * EXPENSE_RATIOS["mountain_labor"])) if mtn_rev else 0,
             "mountain_other_expense": _jitter(int(mtn_rev * EXPENSE_RATIOS["mountain_other_expense"])) if mtn_rev else 0,
-            # Undistributed
             "ag_salaries": _jitter(int(total_rev * EXPENSE_RATIOS["ag_salaries"])),
             "ag_professional_fees": _jitter(int(total_rev * EXPENSE_RATIOS["ag_professional_fees"])),
             "ag_other": _jitter(int(total_rev * EXPENSE_RATIOS["ag_other"])),
-            "info_telecom": _jitter(int(total_rev * EXPENSE_RATIOS["info_telecom"])),
             "sm_salaries": _jitter(int(total_rev * EXPENSE_RATIOS["sm_salaries"])),
             "sm_advertising": _jitter(int(total_rev * EXPENSE_RATIOS["sm_advertising"])),
             "sm_other": _jitter(int(total_rev * EXPENSE_RATIOS["sm_other"])),
@@ -481,29 +436,16 @@ def generate_daily_actuals(prop: dict, line_item_ids: dict) -> list[dict]:
             "energy_electric": _jitter(int(total_rev * EXPENSE_RATIOS["energy_electric"])),
             "energy_gas": _jitter(int(total_rev * EXPENSE_RATIOS["energy_gas"])),
             "energy_water": _jitter(int(total_rev * EXPENSE_RATIOS["energy_water"])),
-            "laundry": _jitter(int(total_rev * EXPENSE_RATIOS["laundry"])),
-            # Below GOP
             "management_fee": _jitter(int(total_rev * EXPENSE_RATIOS["management_fee"])),
-            # Below Operating Income
             "property_tax": _jitter(int(total_rev * EXPENSE_RATIOS["property_tax"]), pct=0.02),
             "insurance": _jitter(int(total_rev * EXPENSE_RATIOS["insurance"]), pct=0.02),
             "rent_lease": _jitter(int(total_rev * EXPENSE_RATIOS["rent_lease"]), pct=0.01),
-            "other_nonop_expense": _jitter(int(total_rev * EXPENSE_RATIOS["other_nonop_expense"])),
-            # Below EBITDA
-            "capital_reserve": _jitter(int(total_rev * EXPENSE_RATIOS["capital_reserve"])),
-            # Below NOI
-            "owner_expense": _jitter(int(total_rev * EXPENSE_RATIOS["owner_expense"])),
-            "other_expenses": _jitter(int(total_rev * EXPENSE_RATIOS["other_expenses"])),
-            "writeoffs": _jitter(int(total_rev * EXPENSE_RATIOS["writeoffs"])),
-            "depreciation": _jitter(int(total_rev * EXPENSE_RATIOS["depreciation"])),
         }
 
         stat_map = {
             "rooms_sold": occupied,
             "available_rooms": rooms,
             "occupied_rooms": occupied,
-            "rooms_out_of_order": RNG.randint(1, max(2, int(rooms * 0.03))),
-            "comp_rooms": RNG.randint(0, max(1, int(rooms * 0.02))),
             "covers": int(occupied * RNG.uniform(1.2, 2.0)),
             "golf_rounds": int(occupied * RNG.uniform(0.1, 0.3)) if golf_greens else 0,
             "mountain_skier_visits": int(occupied * RNG.uniform(0.3, 0.8)) if mtn_lift else 0,
@@ -632,11 +574,9 @@ def generate_monthly_budgets(prop: dict, line_item_ids: dict) -> list[dict]:
             "golf_other_expense": int(golf_rev * EXPENSE_RATIOS["golf_other_expense"]) if golf_rev else 0,
             "mountain_labor": int(mtn_rev * EXPENSE_RATIOS["mountain_labor"]) if mtn_rev else 0,
             "mountain_other_expense": int(mtn_rev * EXPENSE_RATIOS["mountain_other_expense"]) if mtn_rev else 0,
-            # Undistributed
             "ag_salaries": int(total_rev * EXPENSE_RATIOS["ag_salaries"]),
             "ag_professional_fees": int(total_rev * EXPENSE_RATIOS["ag_professional_fees"]),
             "ag_other": int(total_rev * EXPENSE_RATIOS["ag_other"]),
-            "info_telecom": int(total_rev * EXPENSE_RATIOS["info_telecom"]),
             "sm_salaries": int(total_rev * EXPENSE_RATIOS["sm_salaries"]),
             "sm_advertising": int(total_rev * EXPENSE_RATIOS["sm_advertising"]),
             "sm_other": int(total_rev * EXPENSE_RATIOS["sm_other"]),
@@ -646,21 +586,10 @@ def generate_monthly_budgets(prop: dict, line_item_ids: dict) -> list[dict]:
             "energy_electric": int(total_rev * EXPENSE_RATIOS["energy_electric"]),
             "energy_gas": int(total_rev * EXPENSE_RATIOS["energy_gas"]),
             "energy_water": int(total_rev * EXPENSE_RATIOS["energy_water"]),
-            "laundry": int(total_rev * EXPENSE_RATIOS["laundry"]),
-            # Below GOP
             "management_fee": int(total_rev * EXPENSE_RATIOS["management_fee"]),
-            # Below Operating Income
-            "insurance": int(total_rev * EXPENSE_RATIOS["insurance"]),
             "property_tax": int(total_rev * EXPENSE_RATIOS["property_tax"]),
+            "insurance": int(total_rev * EXPENSE_RATIOS["insurance"]),
             "rent_lease": int(total_rev * EXPENSE_RATIOS["rent_lease"]),
-            "other_nonop_expense": int(total_rev * EXPENSE_RATIOS["other_nonop_expense"]),
-            # Below EBITDA
-            "capital_reserve": int(total_rev * EXPENSE_RATIOS["capital_reserve"]),
-            # Below NOI
-            "owner_expense": int(total_rev * EXPENSE_RATIOS["owner_expense"]),
-            "other_expenses": int(total_rev * EXPENSE_RATIOS["other_expenses"]),
-            "writeoffs": int(total_rev * EXPENSE_RATIOS["writeoffs"]),
-            "depreciation": int(total_rev * EXPENSE_RATIOS["depreciation"]),
         }
 
         # Stats as monthly totals
@@ -668,8 +597,6 @@ def generate_monthly_budgets(prop: dict, line_item_ids: dict) -> list[dict]:
             "rooms_sold": monthly_occupied,
             "available_rooms": rooms * days_in_month,
             "occupied_rooms": monthly_occupied,
-            "rooms_out_of_order": int(rooms * 0.02) * days_in_month,
-            "comp_rooms": int(rooms * 0.01) * days_in_month,
             "covers": int(monthly_occupied * 1.5),
             "golf_rounds": int(monthly_occupied * 0.2) if golf_greens else 0,
             "mountain_skier_visits": int(monthly_occupied * 0.5) if mtn_lift else 0,
