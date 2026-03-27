@@ -1,5 +1,6 @@
 "use client";
 
+import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
@@ -130,9 +131,9 @@ function badgeClr(v: number, dt: string): string {
 export default function DepartmentPage({
   params,
 }: {
-  params: { type: string };
+  params: Promise<{ type: string }>;
 }) {
-  const deptType = params.type;
+  const { type: deptType } = use(params);
   const { selectedPropertyId, properties } = useProperty();
   const { getToken } = useAuth();
   const router = useRouter();
