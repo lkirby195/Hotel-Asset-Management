@@ -172,7 +172,7 @@ class TestGetInterMonth:
         # Mock rollup to pass through (leaf data already keyed by correct IDs)
         svc._rollup_to_summaries = AsyncMock(side_effect=lambda db, data: data)
         svc._compute_calculated_rows = AsyncMock()
-        svc._build_waterfall_lines = AsyncMock(return_value=[])
+        svc._build_waterfall_lines = AsyncMock(return_value=[ReportLineItem(id=LINE_ITEM_ID, code='test', name='Test', parent_id=None, is_summary=False, data_type='revenue', sort_order=1, depth=0, actual=100000, budget=80000, variance_dollars=20000, variance_pct=25.0, forecast_lock=None, prior_year_actual=None, py_variance_dollars=None, py_variance_pct=None)])
         svc._fetch_performance_stats = AsyncMock(return_value=[])
 
         mock_item = MagicMock()
@@ -348,7 +348,7 @@ class TestForecastLock:
         svc._fetch_forecast_lock = AsyncMock(return_value={LINE_ITEM_ID: 90000})
         svc._rollup_to_summaries = AsyncMock(side_effect=lambda db, data: data)
         svc._compute_calculated_rows = AsyncMock()
-        svc._build_waterfall_lines = AsyncMock(return_value=[])
+        svc._build_waterfall_lines = AsyncMock(return_value=[ReportLineItem(id=LINE_ITEM_ID, code='test', name='Test', parent_id=None, is_summary=False, data_type='revenue', sort_order=1, depth=0, actual=100000, budget=80000, variance_dollars=20000, variance_pct=25.0, forecast_lock=None, prior_year_actual=None, py_variance_dollars=None, py_variance_pct=None)])
         svc._fetch_performance_stats = AsyncMock(return_value=[])
 
         mock_item = MagicMock()
@@ -485,5 +485,6 @@ class TestTimePeriodFetchMethods:
 
         result = await service._fetch_annual(mock_db, PROPERTY_ID)
         assert result[LINE_ITEM_ID] == 500000
+
 
 
