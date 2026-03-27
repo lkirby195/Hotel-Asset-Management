@@ -710,6 +710,8 @@ class ReportService:
             "total_revenue", "total_dept_expenses", "total_undist_expenses",
             "total_gop", "net_operating_income",
             "management_fee", "insurance", "property_tax", "rent_lease",
+            "capital_reserve", "owner_expense", "other_expenses_below_noi",
+            "writeoffs", "depreciation_expense",
         ]
         result = await db.execute(
             select(LineItem).where(LineItem.code.in_(needed))
