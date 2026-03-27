@@ -147,8 +147,8 @@ export default function DepartmentPage({
       );
       return resp.data.data;
     },
-    enabled: !!selectedPropertyId,
-    retry: false,
+    enabled: !!selectedPropertyId && selectedPropertyId !== "undefined",
+    retry: 1,
   });
 
   // Debug: log errors
