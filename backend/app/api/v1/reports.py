@@ -499,10 +499,10 @@ async def _dept_detail_inner(dept_type, property_id, start, end, current_user, d
         budgets[row.code] = budgets.get(row.code, 0) + prorated
 
     def _a(code: str) -> float:
-        return actuals.get(code, 0)
+        return float(actuals.get(code, 0))
 
     def _b(code: str) -> float:
-        return budgets.get(code, 0)
+        return float(budgets.get(code, 0))
 
     def _sum_a(codes: list[str]) -> float:
         return sum(_a(c) for c in codes)
