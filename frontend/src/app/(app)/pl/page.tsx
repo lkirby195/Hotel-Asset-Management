@@ -46,6 +46,12 @@ interface PLLineItem {
   py_variance_pct: number | null;
 }
 
+interface PerformanceStatItem {
+  label: string;
+  value: number;
+  format: "integer" | "currency" | "percentage";
+}
+
 interface PLReportData {
   property_id: string;
   property_name: string;
@@ -53,6 +59,7 @@ interface PLReportData {
   start_date: string;
   end_date: string;
   lines: PLLineItem[];
+  performance: PerformanceStatItem[];
   note: string | null;
 }
 
@@ -129,6 +136,19 @@ function fmtMargin(cents: number, totalCents: number): string {
   return `${((cents / totalCents) * 100).toFixed(1)}%`;
 }
 
+function fmtStat(stat: PerformanceStatItem): string {
+  switch (stat.format) {
+    case "integer":
+      return Math.round(stat.value).toLocaleString();
+    case "currency":
+      return fmtDollars(stat.value);
+    case "percentage":
+      return `${stat.value.toFixed(1)}%`;
+    default:
+      return String(stat.value);
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    Row classification
    ═══════════════════════════════════════════════════ */
@@ -140,14 +160,13 @@ const TOTAL_KW = [
   "gross operating profit",
   "net operating income",
   "ebitda",
+  "total departmental profit",
+  "operating income",
+  "net income",
 ];
 const SUB_KW = [
-  "dept profit",
-  "department profit",
-  "total undistributed",
   "total non-operating",
   "total other operated",
-  "total fixed",
 ];
 
 function classify(item: PLLineItem): RowStyle {
@@ -623,6 +642,37 @@ export default function PLPage() {
             </thead>
 
             <tbody>
+              {/* Performance section */}
+              {report?.performance && report.performance.length > 0 && (
+                <>
+                  <tr className="bg-surface-900 text-white">
+                    <td colSpan={11} className="py-2.5 px-4 font-bold text-[11px] uppercase tracking-wider">
+                      Performance
+                    </td>
+                  </tr>
+                  {report.performance.map((stat) => (
+                    <tr key={stat.label} className="hover:bg-surface-50 border-b border-surface-100">
+                      <td className="py-1.5 px-4 text-xs" style={{ paddingLeft: 40 }}>
+                        {stat.label}
+                      </td>
+                      <td className="py-1.5 px-4 text-right text-xs font-medium">
+                        {fmtStat(stat)}
+                      </td>
+                      <td className="py-1.5 px-4 text-right text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right border-r-2 border-surface-300 text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right border-r-2 border-surface-300 text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right border-l-2 border-brand-500 text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right text-surface-400">—</td>
+                      <td className="py-1.5 px-4 text-right text-surface-400">—</td>
+                    </tr>
+                  ))}
+                </>
+              )}
+
+              {/* Financial waterfall lines */}
               {lines
                 .filter((l) => vis.has(l.id))
                 .map((l) => (
@@ -631,7 +681,7 @@ export default function PLPage() {
                     item={l}
                     totalRev={totalRev}
                     isExpanded={expanded.has(l.id)}
-                    canExpand={l.is_summary && view === "detail" && !["total_gop", "gop", "gross_operating_profit", "noi", "net_operating_income", "ebitda"].includes(l.code)}
+                    canExpand={l.is_summary && view === "detail" && !["total_gop", "gop", "gross_operating_profit", "noi", "net_operating_income", "total_dept_profit", "operating_income", "ebitda", "net_income"].includes(l.code)}
                     isLoadingChildren={loadingChildren.has(l.id)}
                     onToggle={() => toggle(l.id)}
                   />
@@ -677,11 +727,13 @@ function PLRow({
   onToggle: () => void;
 }) {
   const s = classify(item);
-  const isEbitda = item.name.toLowerCase().includes("ebitda");
   const lc = item.code?.toLowerCase() ?? "";
-  const isWaterfall = ["total_gop", "gop", "gross_operating_profit", "noi", "net_operating_income"].includes(lc);
-  const isGopChild = ["total_undist_expenses", "total_fixed_charges"].includes(lc);
-  const indent = isGopChild ? 48 : item.depth * 24 + 16;
+  const isWaterfall = [
+    "total_gop", "gop", "gross_operating_profit",
+    "noi", "net_operating_income",
+    "total_dept_profit", "operating_income", "ebitda", "net_income",
+  ].includes(lc);
+  const indent = item.depth * 24 + 16;
   const fcstVar =
     item.forecast_lock != null ? item.actual - item.forecast_lock : null;
 
@@ -706,16 +758,13 @@ function PLRow({
         s === "l1" &&
           "bg-surface-100 font-semibold cursor-pointer hover:bg-surface-200",
         s === "l2" && "hover:bg-surface-50",
-        s === "total" && !isEbitda && !isWaterfall && "bg-surface-900 text-white font-bold",
+        s === "total" && !isWaterfall && "bg-surface-900 text-white font-bold",
         s === "subtotal" && "bg-surface-200 font-bold",
-        isGopChild && "bg-surface-100 font-semibold cursor-pointer hover:bg-surface-200",
       )}
       style={
         isWaterfall
           ? { background: "#1e3a5f", color: "#fff", fontWeight: 700 }
-          : isEbitda && s === "total"
-            ? { background: "#0c4a6e", color: "#fff", fontWeight: 700 }
-            : undefined
+          : undefined
       }
       onClick={canExpand ? onToggle : undefined}
     >
