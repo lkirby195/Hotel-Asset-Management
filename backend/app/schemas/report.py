@@ -46,6 +46,12 @@ class PLKPIResponse(BaseModel):
     ebitda_budget: int
 
 
+class PerformanceStatItem(BaseModel):
+    label: str
+    value: float
+    format: str  # "integer", "currency", "percentage"
+
+
 class InterMonthResponse(BaseModel):
     property_id: uuid.UUID
     property_name: str
@@ -53,4 +59,5 @@ class InterMonthResponse(BaseModel):
     start_date: date
     end_date: date
     lines: list[ReportLineItem]
+    performance: list[PerformanceStatItem] = []
     note: str | None = None

@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.cache.keys import report_cache_key, report_children_cache_key
 from app.models.line_item import LineItem
 from app.schemas.common import TimePeriod
-from app.schemas.report import InterMonthResponse, ReportLineItem
+from app.schemas.report import InterMonthResponse, PerformanceStatItem, ReportLineItem
 from app.services.cache_service import CacheService
 
 
@@ -19,6 +19,15 @@ VIEW_MAP = {
     "ytd": "mv_ytd_actuals",
     "t28": "mv_trailing_28",
     "weekly": "mv_weekly_actuals",
+}
+
+# Deterministic UUIDs for virtual (computed-only) waterfall rows
+_CALC_NS = uuid.UUID("00000000-0000-0000-0000-ca1c00000000")
+VIRTUAL_IDS = {
+    "total_dept_profit": uuid.uuid5(_CALC_NS, "total_dept_profit"),
+    "operating_income": uuid.uuid5(_CALC_NS, "operating_income"),
+    "ebitda": uuid.uuid5(_CALC_NS, "ebitda"),
+    "net_income": uuid.uuid5(_CALC_NS, "net_income"),
 }
 
 
@@ -120,14 +129,16 @@ class ReportService:
         py_data = await self._rollup_to_summaries(db, leaf_py)
         fl_data = await self._rollup_to_summaries(db, leaf_fl)
 
-        # Compute calculated rows (GOP, NOI) that aren't covered by rollup
+        # Compute calculated rows for full USALI waterfall
         await self._compute_calculated_rows(db, actuals, budget_data, py_data, fl_data)
 
-        # Fetch top-level (summary) line items
-        line_items = await self._fetch_line_items(db, parent_id=None, summary_only=True)
+        # Build waterfall lines in USALI order
+        lines = await self._build_waterfall_lines(
+            db, actuals, budget_data, py_data, fl_data,
+        )
 
-        # Build response
-        lines = self._build_lines(line_items, actuals, budget_data, py_data, fl_data, depth=0)
+        # Fetch performance stats
+        performance = await self._fetch_performance_stats(db, actuals)
 
         response = InterMonthResponse(
             property_id=property_id,
@@ -136,6 +147,7 @@ class ReportService:
             start_date=eff_start,
             end_date=eff_end,
             lines=lines,
+            performance=performance,
         )
 
         # Cache result
@@ -230,6 +242,12 @@ class ReportService:
 
         child_items = await self._fetch_line_items(db, parent_id=parent_id, summary_only=False)
         lines = self._build_lines(child_items, actuals, budget_data, py_data, fl_data, depth=1)
+
+        # Filter out children where all values are zero/empty
+        lines = [
+            line for line in lines
+            if line.actual != 0 or line.budget != 0 or (line.prior_year_actual is not None and line.prior_year_actual != 0)
+        ]
 
         if cache:
             await cache.set(
@@ -533,19 +551,21 @@ class ReportService:
         prior_year: dict[uuid.UUID, int],
         forecast_lock: dict[uuid.UUID, int],
     ) -> None:
-        """Compute GOP and NOI calculated rows and update dicts in-place.
+        """Compute all USALI waterfall calculated rows and update dicts in-place.
 
-        GOP = total_revenue - total_dept_expenses - total_undist_expenses
-        NOI = GOP - total_fixed_charges
+        Total Dept Profit = Total Revenue - Total Dept Expenses
+        GOP = Total Dept Profit - Total Undistributed Expenses
+        Operating Income = GOP - Management Fee
+        EBITDA = Operating Income - (Insurance + Property Tax + Rent)
+        NOI = EBITDA - Capital Reserve
+        Net Income = NOI - (Owner Expense + Other Expenses + Writeoffs + Depreciation)
         """
         calc_codes = [
-            "total_revenue",
-            "total_dept_expenses",
-            "total_undist_expenses",
-            "total_gop",
-            "total_fixed_charges",
-            "noi",
-            "net_operating_income",
+            "total_revenue", "total_dept_expenses", "total_undist_expenses",
+            "total_gop", "total_fixed_charges", "net_operating_income",
+            "management_fee", "property_tax", "insurance", "rent_lease",
+            "capital_reserve", "owner_expense", "other_expenses",
+            "writeoffs", "depreciation",
         ]
         result = await db.execute(
             select(LineItem.id, LineItem.code).where(LineItem.code.in_(calc_codes))
@@ -556,22 +576,58 @@ class ReportService:
         dept_id = code_to_id.get("total_dept_expenses")
         undist_id = code_to_id.get("total_undist_expenses")
         gop_id = code_to_id.get("total_gop")
-        fixed_id = code_to_id.get("total_fixed_charges")
-        noi_id = code_to_id.get("noi") or code_to_id.get("net_operating_income")
+        noi_id = code_to_id.get("net_operating_income")
+        mgmt_id = code_to_id.get("management_fee")
+        ptax_id = code_to_id.get("property_tax")
+        ins_id = code_to_id.get("insurance")
+        rent_id = code_to_id.get("rent_lease")
+        capres_id = code_to_id.get("capital_reserve")
+        owner_id = code_to_id.get("owner_expense")
+        other_id = code_to_id.get("other_expenses")
+        writeoff_id = code_to_id.get("writeoffs")
+        deprec_id = code_to_id.get("depreciation")
 
         if not (rev_id and dept_id and undist_id and gop_id):
             return
+
+        dept_profit_vid = VIRTUAL_IDS["total_dept_profit"]
+        op_income_vid = VIRTUAL_IDS["operating_income"]
+        ebitda_vid = VIRTUAL_IDS["ebitda"]
+        net_income_vid = VIRTUAL_IDS["net_income"]
 
         for d in (actuals, budgets, prior_year, forecast_lock):
             rev = d.get(rev_id, 0)
             dept = d.get(dept_id, 0)
             undist = d.get(undist_id, 0)
-            gop = rev - dept - undist
+
+            dept_profit = rev - dept
+            d[dept_profit_vid] = dept_profit
+
+            gop = dept_profit - undist
             d[gop_id] = gop
 
-            if noi_id and fixed_id is not None:
-                fixed = d.get(fixed_id, 0)
-                d[noi_id] = gop - fixed
+            mgmt = d.get(mgmt_id, 0) if mgmt_id else 0
+            op_income = gop - mgmt
+            d[op_income_vid] = op_income
+
+            ptax = d.get(ptax_id, 0) if ptax_id else 0
+            ins = d.get(ins_id, 0) if ins_id else 0
+            rent = d.get(rent_id, 0) if rent_id else 0
+            ebitda_val = op_income - ptax - ins - rent
+            d[ebitda_vid] = ebitda_val
+
+            # NOI = EBITDA - capital_reserve (if exists, else EBITDA)
+            capres = d.get(capres_id, 0) if capres_id else 0
+            noi_val = ebitda_val - capres
+            if noi_id:
+                d[noi_id] = noi_val
+
+            # Net Income = NOI - (owner_expense + other_expenses + writeoffs + depreciation)
+            owner = d.get(owner_id, 0) if owner_id else 0
+            other = d.get(other_id, 0) if other_id else 0
+            writeoff = d.get(writeoff_id, 0) if writeoff_id else 0
+            deprec = d.get(deprec_id, 0) if deprec_id else 0
+            d[net_income_vid] = noi_val - (owner + other + writeoff + deprec)
 
     async def _fetch_line_items(
         self,
@@ -638,3 +694,213 @@ class ReportService:
                 py_variance_pct=py_variance_pct,
             ))
         return lines
+
+    # ── Waterfall builder ─────────────────────────────
+
+    async def _build_waterfall_lines(
+        self,
+        db: AsyncSession,
+        actuals: dict[uuid.UUID, int],
+        budgets: dict[uuid.UUID, int],
+        prior_year: dict[uuid.UUID, int],
+        forecast_lock: dict[uuid.UUID, int],
+    ) -> list[ReportLineItem]:
+        """Build P&L lines in USALI waterfall order."""
+        needed = [
+            "total_revenue", "total_dept_expenses", "total_undist_expenses",
+            "total_gop", "net_operating_income",
+            "management_fee", "insurance", "property_tax", "rent_lease",
+        ]
+        result = await db.execute(
+            select(LineItem).where(LineItem.code.in_(needed))
+        )
+        by_code: dict[str, LineItem] = {i.code: i for i in result.scalars().all()}
+
+        def mk(code: str, sort: int, depth: int = 0, clear_parent: bool = False) -> ReportLineItem | None:
+            item = by_code.get(code)
+            if not item:
+                return None
+            return self._make_report_line(
+                item, actuals, budgets, prior_year, forecast_lock,
+                sort_order=sort, depth=depth, clear_parent=clear_parent,
+            )
+
+        def virt(code: str, name: str, sort: int) -> ReportLineItem:
+            return self._make_virtual_line(
+                VIRTUAL_IDS[code], code, name,
+                actuals, budgets, prior_year, forecast_lock,
+                sort_order=sort,
+            )
+
+        lines: list[ReportLineItem] = []
+
+        # 100: Total Revenue (expandable)
+        if line := mk("total_revenue", 100):
+            lines.append(line)
+
+        # 200: Total Dept Expenses (expandable)
+        if line := mk("total_dept_expenses", 200):
+            lines.append(line)
+
+        # 300: Total Dept Profit (calculated)
+        lines.append(virt("total_dept_profit", "Total Departmental Profit", 300))
+
+        # 400: Total Undistributed Expenses (expandable)
+        if line := mk("total_undist_expenses", 400):
+            lines.append(line)
+
+        # 500: GOP (calculated, stored in total_gop)
+        if line := mk("total_gop", 500):
+            lines.append(line)
+
+        # 510: Management Fee (repositioned from total_fixed_charges)
+        if line := mk("management_fee", 510, depth=1, clear_parent=True):
+            lines.append(line)
+
+        # 600: Operating Income (calculated)
+        lines.append(virt("operating_income", "Operating Income", 600))
+
+        # 610-630: Fixed charge children (repositioned)
+        for code, sort in [("insurance", 610), ("property_tax", 620), ("rent_lease", 630)]:
+            if line := mk(code, sort, depth=1, clear_parent=True):
+                lines.append(line)
+
+        # 700: EBITDA (calculated)
+        lines.append(virt("ebitda", "EBITDA", 700))
+
+        # 800: NOI (stored in net_operating_income)
+        if line := mk("net_operating_income", 800):
+            lines.append(line)
+
+        # 900: Net Income (calculated)
+        lines.append(virt("net_income", "Net Income", 900))
+
+        return lines
+
+    def _make_report_line(
+        self,
+        item: LineItem,
+        actuals: dict[uuid.UUID, int],
+        budgets: dict[uuid.UUID, int],
+        prior_year: dict[uuid.UUID, int],
+        forecast_lock: dict[uuid.UUID, int],
+        sort_order: int,
+        depth: int = 0,
+        clear_parent: bool = False,
+    ) -> ReportLineItem:
+        """Build a ReportLineItem from a DB LineItem."""
+        actual = actuals.get(item.id, 0)
+        budget = budgets.get(item.id, 0)
+        py_actual = prior_year.get(item.id)
+        fl_value = forecast_lock.get(item.id) if forecast_lock else None
+
+        variance_dollars = actual - budget
+        variance_pct = round((variance_dollars / budget) * 100, 2) if budget != 0 else None
+        py_var = (actual - py_actual) if py_actual is not None else None
+        py_pct = (
+            round((py_var / py_actual) * 100, 2)
+            if py_actual is not None and py_actual != 0
+            else None
+        )
+
+        return ReportLineItem(
+            id=item.id,
+            code=item.code,
+            name=item.name,
+            parent_id=None if clear_parent else item.parent_id,
+            is_summary=item.is_summary,
+            data_type=item.data_type,
+            sort_order=sort_order,
+            depth=depth,
+            actual=actual,
+            budget=budget,
+            variance_dollars=variance_dollars,
+            variance_pct=variance_pct,
+            forecast_lock=fl_value,
+            prior_year_actual=py_actual,
+            py_variance_dollars=py_var,
+            py_variance_pct=py_pct,
+        )
+
+    def _make_virtual_line(
+        self,
+        vid: uuid.UUID,
+        code: str,
+        name: str,
+        actuals: dict[uuid.UUID, int],
+        budgets: dict[uuid.UUID, int],
+        prior_year: dict[uuid.UUID, int],
+        forecast_lock: dict[uuid.UUID, int],
+        sort_order: int,
+        data_type: str = "revenue",
+    ) -> ReportLineItem:
+        """Build a ReportLineItem for a virtual (computed-only) row."""
+        actual = actuals.get(vid, 0)
+        budget = budgets.get(vid, 0)
+        py_actual = prior_year.get(vid)
+        fl_value = forecast_lock.get(vid) if forecast_lock else None
+
+        variance_dollars = actual - budget
+        variance_pct = round((variance_dollars / budget) * 100, 2) if budget != 0 else None
+        py_var = (actual - py_actual) if py_actual is not None else None
+        py_pct = (
+            round((py_var / py_actual) * 100, 2)
+            if py_actual is not None and py_actual != 0
+            else None
+        )
+
+        return ReportLineItem(
+            id=vid,
+            code=code,
+            name=name,
+            parent_id=None,
+            is_summary=True,
+            data_type=data_type,
+            sort_order=sort_order,
+            depth=0,
+            actual=actual,
+            budget=budget,
+            variance_dollars=variance_dollars,
+            variance_pct=variance_pct,
+            forecast_lock=fl_value,
+            prior_year_actual=py_actual,
+            py_variance_dollars=py_var,
+            py_variance_pct=py_pct,
+        )
+
+    # ── Performance stats ─────────────────────────────
+
+    async def _fetch_performance_stats(
+        self,
+        db: AsyncSession,
+        actuals: dict[uuid.UUID, int],
+    ) -> list[PerformanceStatItem]:
+        """Compute performance statistics from existing stat and revenue items."""
+        codes = ["rooms_sold", "available_rooms", "rooms_revenue", "total_revenue"]
+        result = await db.execute(
+            select(LineItem.id, LineItem.code).where(LineItem.code.in_(codes))
+        )
+        cid: dict[str, uuid.UUID] = {r.code: r.id for r in result.fetchall()}
+
+        def val(code: str) -> int:
+            item_id = cid.get(code)
+            return actuals.get(item_id, 0) if item_id else 0
+
+        rooms_sold = val("rooms_sold")
+        available = val("available_rooms")
+        rooms_rev = val("rooms_revenue")
+        total_rev = val("total_revenue")
+
+        occupancy = round(rooms_sold / available * 100, 1) if available else 0.0
+        adr = round(rooms_rev / rooms_sold) if rooms_sold else 0
+        revpar = round(rooms_rev / available) if available else 0
+        trevpar = round(total_rev / available) if available else 0
+
+        return [
+            PerformanceStatItem(label="Rooms Available", value=available, format="integer"),
+            PerformanceStatItem(label="Rooms Sold", value=rooms_sold, format="integer"),
+            PerformanceStatItem(label="Occupancy %", value=occupancy, format="percentage"),
+            PerformanceStatItem(label="ADR", value=adr, format="currency"),
+            PerformanceStatItem(label="RevPAR", value=revpar, format="currency"),
+            PerformanceStatItem(label="TRevPAR", value=trevpar, format="currency"),
+        ]
