@@ -243,6 +243,12 @@ class ReportService:
         child_items = await self._fetch_line_items(db, parent_id=parent_id, summary_only=False)
         lines = self._build_lines(child_items, actuals, budget_data, py_data, fl_data, depth=1)
 
+        # Filter out children where all values are zero/empty
+        lines = [
+            line for line in lines
+            if line.actual != 0 or line.budget != 0 or (line.prior_year_actual is not None and line.prior_year_actual != 0)
+        ]
+
         if cache:
             await cache.set(
                 report_children_cache_key(str(tenant_id), str(property_id), str(parent_id), period_val),
@@ -551,13 +557,15 @@ class ReportService:
         GOP = Total Dept Profit - Total Undistributed Expenses
         Operating Income = GOP - Management Fee
         EBITDA = Operating Income - (Insurance + Property Tax + Rent)
-        NOI = EBITDA (no capital reserve data)
-        Net Income = NOI (no below-NOI items)
+        NOI = EBITDA - Capital Reserve
+        Net Income = NOI - (Owner Expense + Other Expenses + Writeoffs + Depreciation)
         """
         calc_codes = [
             "total_revenue", "total_dept_expenses", "total_undist_expenses",
             "total_gop", "total_fixed_charges", "net_operating_income",
             "management_fee", "property_tax", "insurance", "rent_lease",
+            "capital_reserve", "owner_expense", "other_expenses",
+            "writeoffs", "depreciation",
         ]
         result = await db.execute(
             select(LineItem.id, LineItem.code).where(LineItem.code.in_(calc_codes))
@@ -573,6 +581,11 @@ class ReportService:
         ptax_id = code_to_id.get("property_tax")
         ins_id = code_to_id.get("insurance")
         rent_id = code_to_id.get("rent_lease")
+        capres_id = code_to_id.get("capital_reserve")
+        owner_id = code_to_id.get("owner_expense")
+        other_id = code_to_id.get("other_expenses")
+        writeoff_id = code_to_id.get("writeoffs")
+        deprec_id = code_to_id.get("depreciation")
 
         if not (rev_id and dept_id and undist_id and gop_id):
             return
@@ -603,10 +616,18 @@ class ReportService:
             ebitda_val = op_income - ptax - ins - rent
             d[ebitda_vid] = ebitda_val
 
+            # NOI = EBITDA - capital_reserve (if exists, else EBITDA)
+            capres = d.get(capres_id, 0) if capres_id else 0
+            noi_val = ebitda_val - capres
             if noi_id:
-                d[noi_id] = ebitda_val  # NOI = EBITDA when no capital reserve
+                d[noi_id] = noi_val
 
-            d[net_income_vid] = ebitda_val  # Net Income = NOI when no below-NOI items
+            # Net Income = NOI - (owner_expense + other_expenses + writeoffs + depreciation)
+            owner = d.get(owner_id, 0) if owner_id else 0
+            other = d.get(other_id, 0) if other_id else 0
+            writeoff = d.get(writeoff_id, 0) if writeoff_id else 0
+            deprec = d.get(deprec_id, 0) if deprec_id else 0
+            d[net_income_vid] = noi_val - (owner + other + writeoff + deprec)
 
     async def _fetch_line_items(
         self,
@@ -855,8 +876,7 @@ class ReportService:
         actuals: dict[uuid.UUID, int],
     ) -> list[PerformanceStatItem]:
         """Compute performance statistics from existing stat and revenue items."""
-        codes = ["rooms_sold", "available_rooms", "occupied_rooms",
-                 "rooms_revenue", "total_revenue"]
+        codes = ["rooms_sold", "available_rooms", "rooms_revenue", "total_revenue"]
         result = await db.execute(
             select(LineItem.id, LineItem.code).where(LineItem.code.in_(codes))
         )
@@ -868,7 +888,6 @@ class ReportService:
 
         rooms_sold = val("rooms_sold")
         available = val("available_rooms")
-        occupied = val("occupied_rooms")
         rooms_rev = val("rooms_revenue")
         total_rev = val("total_revenue")
 
@@ -880,7 +899,6 @@ class ReportService:
         return [
             PerformanceStatItem(label="Rooms Available", value=available, format="integer"),
             PerformanceStatItem(label="Rooms Sold", value=rooms_sold, format="integer"),
-            PerformanceStatItem(label="Rooms Occupied", value=occupied, format="integer"),
             PerformanceStatItem(label="Occupancy %", value=occupancy, format="percentage"),
             PerformanceStatItem(label="ADR", value=adr, format="currency"),
             PerformanceStatItem(label="RevPAR", value=revpar, format="currency"),
