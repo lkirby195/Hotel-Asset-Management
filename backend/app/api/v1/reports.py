@@ -371,74 +371,89 @@ async def _dept_detail_inner(dept_type, property_id, start, end, current_user, d
     }
     keywords = dept_keywords.get(dept_type, [dept_type])
 
-    # Find root department line and collect descendants
-    root_line = None
-    for line in report.lines:
-        if line.depth == 0 and line.is_summary:
-            if any(kw in line.name.lower() for kw in keywords):
-                root_line = line
-                break
+    # Top-level lines are Total Revenue, Total Dept Expenses, etc.
+    # Need to fetch their children to find department-level lines (Rooms Revenue, Rooms Expense, etc.)
+    all_children = []
+    for top_line in report.lines:
+        if top_line.is_summary and top_line.depth == 0:
+            try:
+                kids = await report_service.get_children(
+                    db=db,
+                    property_id=property_id,
+                    parent_id=top_line.id,
+                    period=period,
+                    start_date=eff_start,
+                    end_date=eff_end,
+                    cache=cache,
+                    tenant_id=current_user.tenant_id,
+                )
+                all_children.extend(kids)
+            except Exception:
+                pass
+
+    # Find department root among children (e.g. "Rooms Revenue", "Rooms Expense")
+    dept_roots = []
+    for child in all_children:
+        if any(kw in child.name.lower() for kw in keywords):
+            dept_roots.append(child)
 
     pl_lines: list[DeptPLLine] = []
-    if root_line:
-        included_ids = {root_line.id}
-        sorted_lines = sorted(report.lines, key=lambda x: x.sort_order)
-        for line in sorted_lines:
-            if line.id == root_line.id or (line.parent_id and line.parent_id in included_ids):
-                included_ids.add(line.id)
-                pl_lines.append(DeptPLLine(
-                    id=line.id,
-                    code=line.code,
-                    name=line.name,
-                    parent_id=line.parent_id,
-                    is_summary=line.is_summary,
-                    data_type=line.data_type,
-                    sort_order=line.sort_order,
-                    depth=line.depth,
-                    actual=line.actual,
-                    budget=line.budget,
-                    variance_dollars=line.variance_dollars,
-                    variance_pct=line.variance_pct,
-                    forecast_lock=line.forecast_lock,
-                    prior_year_actual=line.prior_year_actual,
-                    py_variance_dollars=line.py_variance_dollars,
-                    py_variance_pct=line.py_variance_pct,
-                ))
+    for root_line in dept_roots:
+        pl_lines.append(DeptPLLine(
+            id=root_line.id,
+            code=root_line.code,
+            name=root_line.name,
+            parent_id=root_line.parent_id,
+            is_summary=root_line.is_summary,
+            data_type=root_line.data_type,
+            sort_order=root_line.sort_order,
+            depth=0,
+            actual=root_line.actual,
+            budget=root_line.budget,
+            variance_dollars=root_line.variance_dollars,
+            variance_pct=root_line.variance_pct,
+            forecast_lock=root_line.forecast_lock,
+            prior_year_actual=root_line.prior_year_actual,
+            py_variance_dollars=root_line.py_variance_dollars,
+            py_variance_pct=root_line.py_variance_pct,
+        ))
 
-    # Also fetch child lines for the root to get full detail
-    if root_line:
-        children = await report_service.get_children(
-            db=db,
-            property_id=property_id,
-            parent_id=root_line.id,
-            period=period,
-            start_date=eff_start,
-            end_date=eff_end,
-            cache=cache,
-            tenant_id=current_user.tenant_id,
-        )
-        child_ids = {c.id for c in children}
-        for child in children:
-            if child.id not in {pl.id for pl in pl_lines}:
-                pl_lines.append(DeptPLLine(
-                    id=child.id,
-                    code=child.code,
-                    name=child.name,
-                    parent_id=child.parent_id,
-                    is_summary=child.is_summary,
-                    data_type=child.data_type,
-                    sort_order=child.sort_order,
-                    depth=child.depth,
-                    actual=child.actual,
-                    budget=child.budget,
-                    variance_dollars=child.variance_dollars,
-                    variance_pct=child.variance_pct,
-                    forecast_lock=child.forecast_lock,
-                    prior_year_actual=child.prior_year_actual,
-                    py_variance_dollars=child.py_variance_dollars,
-                    py_variance_pct=child.py_variance_pct,
-                ))
-        pl_lines.sort(key=lambda x: x.sort_order)
+        # Fetch grandchildren (line item detail under each dept root)
+        try:
+            grandkids = await report_service.get_children(
+                db=db,
+                property_id=property_id,
+                parent_id=root_line.id,
+                period=period,
+                start_date=eff_start,
+                end_date=eff_end,
+                cache=cache,
+                tenant_id=current_user.tenant_id,
+            )
+            for child in grandkids:
+                if child.id not in {pl.id for pl in pl_lines}:
+                    pl_lines.append(DeptPLLine(
+                        id=child.id,
+                        code=child.code,
+                        name=child.name,
+                        parent_id=child.parent_id,
+                        is_summary=child.is_summary,
+                        data_type=child.data_type,
+                        sort_order=child.sort_order,
+                        depth=1,
+                        actual=child.actual,
+                        budget=child.budget,
+                        variance_dollars=child.variance_dollars,
+                        variance_pct=child.variance_pct,
+                        forecast_lock=child.forecast_lock,
+                        prior_year_actual=child.prior_year_actual,
+                        py_variance_dollars=child.py_variance_dollars,
+                        py_variance_pct=child.py_variance_pct,
+                    ))
+        except Exception:
+            pass
+
+    pl_lines.sort(key=lambda x: x.sort_order)
 
     # Build department-specific KPIs
     days_in_range = (eff_end - eff_start).days + 1
