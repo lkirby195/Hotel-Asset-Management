@@ -123,11 +123,23 @@ class ReportService:
         # Compute calculated rows (GOP, NOI) that aren't covered by rollup
         await self._compute_calculated_rows(db, actuals, budget_data, py_data, fl_data)
 
-        # Fetch top-level (summary) line items
-        line_items = await self._fetch_line_items(db, parent_id=None, summary_only=True)
+        # Fetch top-level line items (all items with no parent)
+        line_items = await self._fetch_line_items(db, parent_id=None, summary_only=False)
 
         # Build response
         lines = self._build_lines(line_items, actuals, budget_data, py_data, fl_data, depth=0)
+
+        # Inject performance children inline (performance has no accordion)
+        perf_item = next((li for li in line_items if li.code == "performance"), None)
+        if perf_item:
+            perf_children = await self._fetch_line_items(db, parent_id=perf_item.id, summary_only=False)
+            perf_child_lines = self._build_lines(
+                perf_children, actuals, budget_data, py_data, fl_data, depth=1,
+            )
+            perf_idx = next((i for i, l in enumerate(lines) if l.code == "performance"), None)
+            if perf_idx is not None:
+                for j, cl in enumerate(perf_child_lines):
+                    lines.insert(perf_idx + 1 + j, cl)
 
         response = InterMonthResponse(
             property_id=property_id,
@@ -533,45 +545,109 @@ class ReportService:
         prior_year: dict[uuid.UUID, int],
         forecast_lock: dict[uuid.UUID, int],
     ) -> None:
-        """Compute GOP and NOI calculated rows and update dicts in-place.
+        """Compute all USALI waterfall calculated rows and update dicts in-place.
 
-        GOP = total_revenue - total_dept_expenses - total_undist_expenses
-        NOI = GOP - total_fixed_charges
+        Total Dept Profit = Total Revenue - Total Dept Expenses
+        GOP = Dept Profit - sum(undistributed: A&G, Info&Telecom, Sales&Promo, R&M, Utilities, Laundry)
+        Operating Income = GOP - Management Fees
+        EBITDA = Operating Income - (Insurance + Property Tax + Rent + Other Non-Op)
+        NOI = EBITDA - Capital Reserve
+        Net Income = NOI - (Owner Expense + Other Expenses + Writeoffs + Depreciation)
         """
         calc_codes = [
-            "total_revenue",
-            "total_dept_expenses",
-            "total_undist_expenses",
-            "total_gop",
-            "total_fixed_charges",
-            "noi",
+            "total_revenue", "total_dept_expenses", "total_dept_profit", "total_gop",
+            # Undistributed items
+            "admin_general", "info_telecom", "sales_promotion",
+            "repairs_maintenance", "utilities_expense", "laundry",
+            # Below GOP
+            "management_fee",
+            # Calculated
+            "operating_income",
+            # Below Operating Income
+            "insurance", "property_tax", "rent_lease", "other_nonop_expense",
+            # Calculated
+            "ebitda",
+            # Below EBITDA
+            "capital_reserve",
+            # Calculated
             "net_operating_income",
+            # Below NOI
+            "owner_expense", "other_expenses", "writeoffs", "depreciation",
+            # Bottom line
+            "net_income",
         ]
         result = await db.execute(
             select(LineItem.id, LineItem.code).where(LineItem.code.in_(calc_codes))
         )
-        code_to_id: dict[str, uuid.UUID] = {row.code: row.id for row in result.fetchall()}
+        c: dict[str, uuid.UUID] = {row.code: row.id for row in result.fetchall()}
 
-        rev_id = code_to_id.get("total_revenue")
-        dept_id = code_to_id.get("total_dept_expenses")
-        undist_id = code_to_id.get("total_undist_expenses")
-        gop_id = code_to_id.get("total_gop")
-        fixed_id = code_to_id.get("total_fixed_charges")
-        noi_id = code_to_id.get("noi") or code_to_id.get("net_operating_income")
+        rev_id = c.get("total_revenue")
+        dept_id = c.get("total_dept_expenses")
+        dept_profit_id = c.get("total_dept_profit")
+        gop_id = c.get("total_gop")
+        op_income_id = c.get("operating_income")
+        ebitda_id = c.get("ebitda")
+        noi_id = c.get("net_operating_income")
+        net_income_id = c.get("net_income")
 
-        if not (rev_id and dept_id and undist_id and gop_id):
+        if not (rev_id and dept_id):
             return
+
+        # Undistributed item IDs
+        undist_ids = [c.get(k) for k in (
+            "admin_general", "info_telecom", "sales_promotion",
+            "repairs_maintenance", "utilities_expense", "laundry",
+        )]
+        # Below Operating Income IDs
+        below_op_ids = [c.get(k) for k in (
+            "insurance", "property_tax", "rent_lease", "other_nonop_expense",
+        )]
+        # Below NOI IDs
+        below_noi_ids = [c.get(k) for k in (
+            "owner_expense", "other_expenses", "writeoffs", "depreciation",
+        )]
+
+        mgmt_id = c.get("management_fee")
+        cap_id = c.get("capital_reserve")
 
         for d in (actuals, budgets, prior_year, forecast_lock):
             rev = d.get(rev_id, 0)
             dept = d.get(dept_id, 0)
-            undist = d.get(undist_id, 0)
-            gop = rev - dept - undist
-            d[gop_id] = gop
 
-            if noi_id and fixed_id is not None:
-                fixed = d.get(fixed_id, 0)
-                d[noi_id] = gop - fixed
+            # Total Departmental Profit
+            dept_profit = rev - dept
+            if dept_profit_id:
+                d[dept_profit_id] = dept_profit
+
+            # GOP = Dept Profit - Undistributed
+            undist_sum = sum(d.get(uid, 0) for uid in undist_ids if uid)
+            gop = dept_profit - undist_sum
+            if gop_id:
+                d[gop_id] = gop
+
+            # Operating Income = GOP - Management Fees
+            mgmt = d.get(mgmt_id, 0) if mgmt_id else 0
+            op_income = gop - mgmt
+            if op_income_id:
+                d[op_income_id] = op_income
+
+            # EBITDA = Operating Income - (Insurance + Property Tax + Rent + Other Non-Op)
+            below_op_sum = sum(d.get(uid, 0) for uid in below_op_ids if uid)
+            ebitda = op_income - below_op_sum
+            if ebitda_id:
+                d[ebitda_id] = ebitda
+
+            # NOI = EBITDA - Capital Reserve
+            cap = d.get(cap_id, 0) if cap_id else 0
+            noi = ebitda - cap
+            if noi_id:
+                d[noi_id] = noi
+
+            # Net Income = NOI - (Owner Expense + Other Expenses + Writeoffs + Depreciation)
+            below_noi_sum = sum(d.get(uid, 0) for uid in below_noi_ids if uid)
+            net = noi - below_noi_sum
+            if net_income_id:
+                d[net_income_id] = net
 
     async def _fetch_line_items(
         self,
